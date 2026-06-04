@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenCode 文件操作 · 六把手术刀</title>
+<style>
+:root {
+  --bg:        #080c14;
+  --surface:   rgba(255,255,255,0.04);
+  --glass:     rgba(255,255,255,0.055);
+  --border:    rgba(255,255,255,0.07);
+  --text:      #e2e8f0;
+  --text-dim:  #7a8ba5;
+  --c-read:    #60a5fa;
+  --c-write:   #f59e0b;
+  --c-edit:    #a78bfa;
+  --c-glob:    #34d399;
+  --c-grep:    #fb7185;
+  --c-bash:    #22d3ee;
+  --c-patch:   #f472b6;
+  --radius:    20px;
+  --radius-sm: 12px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Menlo, monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  line-height:1.7;overflow-x:hidden;-webkit-font-smoothing:antialiased;
+}
+
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 800px 500px at 10% 15%, rgba(96,165,250,0.05), transparent 70%),
+    radial-gradient(ellipse 700px 500px at 90% 80%, rgba(34,211,238,0.05), transparent 70%),
+    radial-gradient(ellipse 500px 400px at 50% 50%, rgba(167,139,250,0.03), transparent 70%);
+}
+body::after{
+  content:'';position:fixed;inset:0;opacity:0.02;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:180px;
+}
+
+.container{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 1.5rem}
+section{padding:5rem 0}
+
+.glass{
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+
+/* ── hero ── */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;text-align:center;padding:2rem 1.5rem;position:relative;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;
+  border-radius:999px;background:var(--glass);border:1px solid var(--border);
+  font-size:.78rem;color:var(--text-dim);margin-bottom:2rem;backdrop-filter:blur(12px);
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:#34d399;animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.hero h1{font-size:clamp(2.4rem,6.5vw,4.2rem);font-weight:800;letter-spacing:-.04em;line-height:1.1;margin-bottom:1.2rem}
+.hero h1 .t{background:linear-gradient(135deg,var(--c-read),var(--c-bash));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .sub{font-size:clamp(.95rem,2.2vw,1.15rem);color:var(--text-dim);max-width:560px;font-weight:300}
+.hero .one-line{
+  margin-top:2.2rem;padding:1.1rem 1.8rem;border-radius:var(--radius);
+  background:linear-gradient(135deg,rgba(96,165,250,0.06),rgba(34,211,238,0.06));
+  border:1px solid var(--border);font-size:1.02rem;max-width:660px;backdrop-filter:blur(16px);
+}
+.scroll-cue{margin-top:3.5rem;animation:float 3s ease-in-out infinite;color:var(--text-dim);font-size:.82rem;display:flex;flex-direction:column;align-items:center;gap:.25rem}
+.scroll-cue span:last-child{font-size:1.3rem}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+
+/* ── section head ── */
+.sec-head{margin-bottom:2.5rem}
+.sec-head .num{font-size:.72rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:.4rem}
+.sec-head h2{font-size:clamp(1.5rem,3.2vw,2rem);font-weight:700;letter-spacing:-.02em}
+
+/* ── tool cards grid ── */
+.tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem}
+@media(max-width:900px){.tool-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.tool-grid{grid-template-columns:1fr}}
+
+.tool-card{
+  padding:1.6rem;transition:transform .32s cubic-bezier(.25,.8,.25,1),box-shadow .32s ease;cursor:default;
+}
+.tool-card:hover{transform:translateY(-3px)}
+.tool-card .icon{
+  width:44px;height:44px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  font-size:1.15rem;margin-bottom:1rem;transition:transform .3s;
+}
+.tool-card:hover .icon{transform:scale(1.1) rotate(-3deg)}
+.tool-card h3{font-size:1rem;font-weight:700;margin-bottom:.3rem;display:flex;align-items:center;gap:.5rem}
+.tool-card h3 code{font-family:var(--mono);font-size:.82rem;font-weight:500;opacity:.7}
+.tool-card p{color:var(--text-dim);font-size:.84rem;line-height:1.65}
+.tool-card .tag{
+  display:inline-block;font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  padding:.15rem .5rem;border-radius:5px;margin-top:.8rem;
+}
+
+.tc-read  {--tc:var(--c-read)}  .tc-read  .icon{background:rgba(96,165,250,0.1);color:var(--c-read)}   .tc-read  .tag{background:rgba(96,165,250,0.1);color:var(--c-read)}
+.tc-write {--tc:var(--c-write)} .tc-write .icon{background:rgba(245,158,11,0.1);color:var(--c-write)}  .tc-write .tag{background:rgba(245,158,11,0.1);color:var(--c-write)}
+.tc-edit  {--tc:var(--c-edit)}  .tc-edit  .icon{background:rgba(167,139,250,0.1);color:var(--c-edit)}  .tc-edit  .tag{background:rgba(167,139,250,0.1);color:var(--c-edit)}
+.tc-glob  {--tc:var(--c-glob)}  .tc-glob  .icon{background:rgba(52,211,153,0.1);color:var(--c-glob)}   .tc-glob  .tag{background:rgba(52,211,153,0.1);color:var(--c-glob)}
+.tc-grep  {--tc:var(--c-grep)}  .tc-grep  .icon{background:rgba(251,113,133,0.1);color:var(--c-grep)}  .tc-grep  .tag{background:rgba(251,113,133,0.1);color:var(--c-grep)}
+.tc-bash  {--tc:var(--c-bash)}  .tc-bash  .icon{background:rgba(34,211,238,0.1);color:var(--c-bash)}   .tc-bash  .tag{background:rgba(34,211,238,0.1);color:var(--c-bash)}
+.tool-card:hover{box-shadow:0 10px 40px color-mix(in srgb, var(--tc) 12%, transparent)}
+
+/* ── analogy map ── */
+.analogy-map{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;
+}
+@media(max-width:768px){.analogy-map{grid-template-columns:1fr}}
+.analogy-item{text-align:center;padding:2rem 1.5rem}
+.analogy-item .big{font-size:2.8rem;display:block;margin-bottom:.6rem}
+.analogy-item h4{font-size:.95rem;margin-bottom:.25rem}
+.analogy-item p{color:var(--text-dim);font-size:.82rem}
+
+/* ── code block ── */
+.code-block{
+  background:rgba(0,0,0,0.35);border-radius:var(--radius-sm);overflow:hidden;
+  border:1px solid var(--border);margin:1rem 0;
+}
+.code-bar{
+  display:flex;align-items:center;gap:.4rem;padding:.65rem 1rem;
+  background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);
+}
+.code-bar .d{width:9px;height:9px;border-radius:50%}
+.code-bar .dr{background:#ef4444}.code-bar .dy{background:#f59e0b}.code-bar .dg{background:#22c55e}
+.code-bar .lbl{margin-left:.4rem;font-size:.7rem;color:var(--text-dim);font-family:var(--mono)}
+.code-body{
+  padding:1.2rem 1.4rem;font-family:var(--mono);font-size:.78rem;line-height:1.85;
+  overflow-x:auto;
+}
+.cm{color:#6b7b8d}.kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.prop{color:#79c0ff}.hl{color:#ffa657}
+
+/* ── interactive demo ── */
+.demo-wrap{padding:2.2rem}
+.demo-scenario{
+  display:flex;align-items:center;gap:1rem;padding:1rem 1.4rem;border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:1.5rem;font-size:.9rem;
+}
+.demo-scenario .emoji{font-size:1.5rem}
+.demo-scenario strong{color:var(--c-bash)}
+
+.terminal{background:rgba(0,0,0,0.45);border-radius:var(--radius-sm);border:1px solid var(--border);overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:.4rem;padding:.6rem 1rem;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border)}
+.term-body{padding:1.2rem;min-height:260px;font-family:var(--mono);font-size:.78rem;line-height:1.85;overflow-y:auto;max-height:420px}
+
+.tl{opacity:0;transform:translateX(-8px);transition:opacity .35s,transform .35s}
+.tl.v{opacity:1;transform:translateX(0)}
+.tl .p{color:var(--c-read)}
+.tl .w{color:var(--c-write)}
+.tl .e{color:var(--c-edit)}
+.tl .g{color:var(--c-glob)}
+.tl .r{color:var(--c-grep)}
+.tl .b{color:var(--c-bash)}
+.tl .ok{color:#34d399}
+.tl .d{color:var(--text-dim)}
+
+.demo-btns{display:flex;gap:.7rem;margin-top:1.2rem;flex-wrap:wrap}
+.btn{
+  padding:.55rem 1.3rem;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--glass);color:var(--text);font-family:var(--font);font-size:.82rem;
+  font-weight:500;cursor:pointer;transition:all .22s;backdrop-filter:blur(12px);
+}
+.btn:hover{background:rgba(255,255,255,0.1);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.primary{background:linear-gradient(135deg,var(--c-read),#3b82f6);border-color:transparent;color:#fff;font-weight:700}
+.btn.primary:hover{box-shadow:0 4px 20px rgba(96,165,250,0.35)}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none!important}
+
+/* ── pipeline ── */
+.pipeline{display:flex;align-items:stretch;gap:0;margin:2rem 0}
+.pipe-step{
+  flex:1;padding:1.3rem 1rem;text-align:center;position:relative;
+  background:var(--glass);border:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;
+}
+.pipe-step:first-child{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.pipe-step:last-child{border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.pipe-step .sn{
+  width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  font-size:.7rem;font-weight:700;
+}
+.pipe-step h5{font-size:.8rem}
+.pipe-step p{font-size:.68rem;color:var(--text-dim)}
+.pipe-arrow{
+  display:flex;align-items:center;font-size:1rem;color:var(--text-dim);padding:0 .15rem;
+  background:var(--glass);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+}
+@media(max-width:768px){
+  .pipeline{flex-direction:column}
+  .pipe-step:first-child{border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+  .pipe-step:last-child{border-radius:0 0 var(--radius-sm) var(--radius-sm)}
+  .pipe-arrow{transform:rotate(90deg);justify-self:center;border:none;padding:.3rem 0}
+}
+
+.ps1 .sn{background:rgba(96,165,250,0.12);color:var(--c-read)}
+.ps2 .sn{background:rgba(52,211,153,0.12);color:var(--c-glob)}
+.ps3 .sn{background:rgba(251,113,133,0.12);color:var(--c-grep)}
+.ps4 .sn{background:rgba(167,139,250,0.12);color:var(--c-edit)}
+.ps5 .sn{background:rgba(245,158,11,0.12);color:var(--c-write)}
+
+/* ── perm table ── */
+.perm-table{width:100%;border-collapse:separate;border-spacing:0;font-size:.85rem;overflow:hidden}
+.perm-table th{padding:.85rem 1rem;text-align:left;font-weight:600;font-size:.8rem;background:rgba(255,255,255,0.02)}
+.perm-table th:first-child{width:120px}
+.perm-table td{padding:.8rem 1rem;border-top:1px solid var(--border);color:var(--text-dim)}
+.perm-table td:first-child{color:var(--text);font-weight:600;font-family:var(--mono);font-size:.78rem}
+.perm-table code{font-family:var(--mono);font-size:.78rem;background:rgba(255,255,255,0.06);padding:.1rem .35rem;border-radius:4px}
+
+/* ── takeaway ── */
+.takeaway-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem}
+@media(max-width:768px){.takeaway-grid{grid-template-columns:1fr}}
+.tk-item{text-align:center;padding:2rem 1.2rem}
+.tk-item .n{
+  font-size:2.2rem;font-weight:800;line-height:1;margin-bottom:.7rem;
+  background:linear-gradient(135deg,var(--c-read),var(--c-bash));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.tk-item h4{font-size:.95rem;margin-bottom:.3rem}
+.tk-item p{color:var(--text-dim);font-size:.82rem}
+
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 auto;max-width:500px}
+footer{text-align:center;padding:3.5rem 1rem 2.5rem;color:var(--text-dim);font-size:.78rem}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .65s cubic-bezier(.25,.8,.25,1),transform .65s cubic-bezier(.25,.8,.25,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> OpenCode 内置工具 · 文件操作篇</div>
+  <h1>OpenCode 的<br><span class="t">六把手术刀</span></h1>
+  <p class="sub">读懂 AI Agent 如何「读、搜、写、改」你的本地文件</p>
+  <div class="one-line reveal">
+    OpenCode 不靠魔法操作文件 —— 它拥有 <strong>6 个内置工具</strong>，每个工具职责单一、权限可控，像外科医生的手术刀一样精准。
+  </div>
+  <div class="scroll-cue"><span>向下滚动</span><span>&#x25BE;</span></div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ 01 类比 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">01 / 类比</div>
+    <h2>把 OpenCode 想象成一位图书管理员</h2>
+  </div>
+
+  <div class="analogy-map">
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x1F4D6;</span>
+      <h4 style="color:var(--c-read)">Read · 翻书</h4>
+      <p>打开任意一本书（文件），翻到指定页码（行号），逐行阅读内容</p>
+    </div>
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x1F50D;</span>
+      <h4 style="color:var(--c-glob)">Glob · 查目录</h4>
+      <p>按名字模式查找书籍 —— "帮我找所有 .ts 结尾的书"</p>
+    </div>
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x1F9AF;</span>
+      <h4 style="color:var(--c-grep)">Grep · 搜正文</h4>
+      <p>在所有书的内容里搜索关键词 —— "哪本书提到了 async/await？"</p>
+    </div>
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x270F;&#xFE0F;</span>
+      <h4 style="color:var(--c-edit)">Edit · 涂改液</h4>
+      <p>精确替换书中的某段文字 —— 把 "foo" 改成 "bar"</p>
+    </div>
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x1F4DD;</span>
+      <h4 style="color:var(--c-write)">Write · 新建页</h4>
+      <p>创建新书或整页覆写 —— "帮我写一个 config.json"</p>
+    </div>
+    <div class="glass analogy-item reveal">
+      <span class="big">&#x1F4BB;</span>
+      <h4 style="color:var(--c-bash)">Bash · 终端</h4>
+      <p>执行任意命令 —— git、npm、python……全能但需谨慎</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 02 六大工具卡片 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">02 / 工具详解</div>
+    <h2>六个工具，各司其职</h2>
+  </div>
+
+  <div class="tool-grid">
+
+    <div class="glass tool-card tc-read reveal">
+      <div class="icon">&#x1F4D6;</div>
+      <h3><code>read</code></h3>
+      <p>读取文件内容。支持指定起始行和行数，适合逐段阅读大文件。也可以读取目录结构。</p>
+      <span class="tag">只读 · 无风险</span>
+    </div>
+
+    <div class="glass tool-card tc-glob reveal">
+      <div class="icon">&#x1F50D;</div>
+      <h3><code>glob</code></h3>
+      <p>用通配符模式查找文件路径，如 <code>src/**/*.ts</code>。按修改时间排序，快速定位目标文件。</p>
+      <span class="tag">只读 · 无风险</span>
+    </div>
+
+    <div class="glass tool-card tc-grep reveal">
+      <div class="icon">&#x1F9AF;</div>
+      <h3><code>grep</code></h3>
+      <p>在文件内容中搜索正则表达式。底层用 ripgrep，速度快，支持过滤文件类型。</p>
+      <span class="tag">只读 · 无风险</span>
+    </div>
+
+    <div class="glass tool-card tc-edit reveal">
+      <div class="icon">&#x270F;&#xFE0F;</div>
+      <h3><code>edit</code></h3>
+      <p>精确替换文件中的字符串。必须先 read 才能 edit。找不到原文本会报错，防止误改。</p>
+      <span class="tag">修改 · 需谨慎</span>
+    </div>
+
+    <div class="glass tool-card tc-write reveal">
+      <div class="icon">&#x1F4DD;</div>
+      <h3><code>write</code></h3>
+      <p>创建新文件或完整覆写已有文件。用于生成全新内容，不适合微调已有文件。</p>
+      <span class="tag">写入 · 需谨慎</span>
+    </div>
+
+    <div class="glass tool-card tc-bash reveal">
+      <div class="icon">&#x1F4BB;</div>
+      <h3><code>bash</code></h3>
+      <p>执行 Shell 命令。git、npm install、python 等都在这里运行。权限最大、风险最高。</p>
+      <span class="tag">执行 · 高权限</span>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 03 工作流水线 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">03 / 工作流水线</div>
+    <h2>一次完整的文件操作流程</h2>
+  </div>
+
+  <p style="color:var(--text-dim);margin-bottom:1.5rem;font-size:.9rem">
+    当你说「帮我给项目加一个 .gitignore」时，OpenCode 内部会按以下顺序调用工具：
+  </p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-step ps1">
+      <div class="sn">1</div>
+      <h5 style="color:var(--c-read)">Glob</h5>
+      <p>扫描项目结构</p>
+    </div>
+    <div class="pipe-arrow">&#x27A1;</div>
+    <div class="pipe-step ps2">
+      <div class="sn">2</div>
+      <h5 style="color:var(--c-glob)">Read</h5>
+      <p>读已有配置文件</p>
+    </div>
+    <div class="pipe-arrow">&#x27A1;</div>
+    <div class="pipe-step ps3">
+      <div class="sn">3</div>
+      <h5 style="color:var(--c-grep)">Grep</h5>
+      <p>检测技术栈特征</p>
+    </div>
+    <div class="pipe-arrow">&#x27A1;</div>
+    <div class="pipe-step ps4">
+      <div class="sn">4</div>
+      <h5 style="color:var(--c-edit)">分析</h5>
+      <p>确定忽略规则</p>
+    </div>
+    <div class="pipe-arrow">&#x27A1;</div>
+    <div class="pipe-step ps5">
+      <div class="sn">5</div>
+      <h5 style="color:var(--c-write)">Write</h5>
+      <p>生成 .gitignore</p>
+    </div>
+  </div>
+
+  <div class="code-block reveal">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">opencode · 工具调用日志</span></div>
+    <div class="code-body">
+      <span class="cm">// 步骤 1: 扫描项目结构</span><br>
+      <span class="kw">glob</span>({ <span class="prop">pattern</span>: <span class="str">"**/*"</span> })<br>
+      <span class="cm">// → 发现 package.json、node_modules/、dist/</span><br><br>
+      <span class="cm">// 步骤 2: 读取已有配置</span><br>
+      <span class="kw">read</span>({ <span class="prop">filePath</span>: <span class="str">"package.json"</span> })<br>
+      <span class="cm">// → 发现使用了 TypeScript + Next.js</span><br><br>
+      <span class="cm">// 步骤 3: 检测是否有 .env 文件（含敏感信息）</span><br>
+      <span class="kw">grep</span>({ <span class="prop">pattern</span>: <span class="str">"API_KEY|SECRET"</span>, <span class="prop">include</span>: <span class="str">".env*"</span> })<br>
+      <span class="cm">// → 发现 .env.local 存在</span><br><br>
+      <span class="cm">// 步骤 4: 生成 .gitignore 文件</span><br>
+      <span class="kw">write</span>({<br>
+      &nbsp;&nbsp;<span class="prop">filePath</span>: <span class="str">".gitignore"</span>,<br>
+      &nbsp;&nbsp;<span class="prop">content</span>: <span class="str">"node_modules/\ndist/\n.next/\n.env*.local\n*.tsbuildinfo"</span><br>
+      })
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 04 交互演示 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">04 / 交互演示</div>
+    <h2>亲手体验一次完整操作</h2>
+  </div>
+
+  <div class="glass demo-wrap reveal">
+    <div class="demo-scenario">
+      <span class="emoji">&#x1F3AF;</span>
+      <span>场景：你说「<strong>帮我在 src 下创建一个 utils.ts，并写一个 formatDate 函数</strong>」，观察 OpenCode 如何分步调用工具。</span>
+    </div>
+
+    <div class="terminal">
+      <div class="term-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">opencode agent</span></div>
+      <div class="term-body" id="termBody">
+        <div class="tl v"><span class="d">$ </span>等待你的指令...</div>
+      </div>
+    </div>
+
+    <div class="demo-btns">
+      <button class="btn primary" id="btnGo" onclick="runDemo()">&#x25B6; 开始演示</button>
+      <button class="btn" id="btnRst" onclick="resetDemo()" disabled>&#x21BA; 重置</button>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 05 权限控制 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">05 / 安全护栏</div>
+    <h2>每个工具都有权限开关</h2>
+  </div>
+
+  <p style="color:var(--text-dim);margin-bottom:1.5rem;font-size:.88rem">
+    在 <code>opencode.json</code> 中通过 <code>permission</code> 字段控制每个工具的行为：
+  </p>
+
+  <div class="glass reveal" style="overflow:hidden;border-radius:var(--radius)">
+    <table class="perm-table">
+      <thead>
+        <tr><th>权限值</th><th>行为</th><th>适用工具</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>"allow"</code></td><td>直接执行，无需确认</td><td>read、glob、grep（默认）</td></tr>
+        <tr><td><code>"ask"</code></td><td>每次执行前弹出确认框</td><td>bash（推荐）</td></tr>
+        <tr><td><code>"deny"</code></td><td>完全禁止使用</td><td>敏感环境下禁用 write</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block reveal" style="margin-top:1.2rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">opencode.json</span></div>
+    <div class="code-body">
+      {<br>
+      &nbsp;&nbsp;<span class="prop">"permission"</span>: {<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"read"</span>:  <span class="str">"allow"</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"glob"</span>:  <span class="str">"allow"</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"grep"</span>:  <span class="str">"allow"</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"edit"</span>:  <span class="str">"allow"</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"write"</span>: <span class="str">"allow"</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"bash"</span>:  <span class="str">"ask"</span>&nbsp;&nbsp;<span class="cm">// 每次执行前需确认</span><br>
+      &nbsp;&nbsp;}<br>
+      }
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 06 补充工具 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">06 / 补充工具</div>
+    <h2>还有这些好帮手</h2>
+  </div>
+
+  <div class="tool-grid">
+    <div class="glass tool-card reveal" style="--tc:var(--c-patch)">
+      <div class="icon" style="background:rgba(244,114,182,0.1);color:var(--c-patch)">&#x1F9E9;</div>
+      <h3><code>apply_patch</code></h3>
+      <p>批量应用补丁文件。可同时增、删、改多个文件，适合大规模重构。</p>
+      <span class="tag" style="background:rgba(244,114,182,0.1);color:var(--c-patch)">批量修改 · 高级</span>
+    </div>
+    <div class="glass tool-card reveal" style="--tc:var(--c-glob)">
+      <div class="icon" style="background:rgba(52,211,153,0.1);color:var(--c-glob)">&#x1F4CB;</div>
+      <h3><code>todowrite</code></h3>
+      <p>管理任务清单。跟踪多步骤任务的进度，让 AI 不遗漏、不重复。</p>
+      <span class="tag" style="background:rgba(52,211,153,0.1);color:var(--c-glob)">任务管理 · 辅助</span>
+    </div>
+    <div class="glass tool-card reveal" style="--tc:var(--c-bash)">
+      <div class="icon" style="background:rgba(34,211,238,0.1);color:var(--c-bash)">&#x2753;</div>
+      <h3><code>question</code></h3>
+      <p>向用户提问。当指令不明确时，AI 会主动询问你的偏好和需求。</p>
+      <span class="tag" style="background:rgba(34,211,238,0.1);color:var(--c-bash)">交互 · 安全</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 07 知识锚点 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">07 / 记住这三条</div>
+    <h2>知识锚点</h2>
+  </div>
+
+  <div class="takeaway-grid">
+    <div class="glass tk-item reveal">
+      <div class="n">01</div>
+      <h4>先读后写</h4>
+      <p>OpenCode 的铁律：修改文件前必须先 Read，确保 AI 理解上下文后再动手。</p>
+    </div>
+    <div class="glass tk-item reveal">
+      <div class="n">02</div>
+      <h4>权限分级</h4>
+      <p>读操作默认放行，写操作可控，Bash 建议设为 "ask"——越危险的工具，越需要人类确认。</p>
+    </div>
+    <div class="glass tk-item reveal">
+      <div class="n">03</div>
+      <h4>精准外科手术</h4>
+      <p>Edit 用字符串精确匹配替换，而非整文件覆写。小改动用 Edit，新建用 Write，批量用 Patch。</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>OpenCode 文件操作 · 六把手术刀 &mdash; 由 opencode 生成</footer>
+
+<script>
+const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')})},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+const script=[
+  {t:'<span class="d">────────────────────────────────</span>',d:200},
+  {t:'<span class="b">&#x1F4AC; 用户:</span> 帮我在 src 下创建一个 utils.ts，写一个 formatDate 函数',d:600},
+  {t:'',d:150},
+  {t:'<span class="d">&#x25B8; OpenCode 开始分析任务...</span>',d:400},
+  {t:'',d:100},
+
+  {t:'<span class="g">[glob]</span> 扫描项目结构...',d:400},
+  {t:'<span class="g">  →</span> pattern: <span class="str">"src/**/*.ts"</span>',d:300},
+  {t:'<span class="ok">  ✓</span> 找到: src/index.ts, src/app.ts, src/helpers/',d:400},
+  {t:'',d:150},
+
+  {t:'<span class="p">[read]</span> 查看现有代码风格...',d:400},
+  {t:'<span class="p">  →</span> filePath: <span class="str">"src/index.ts"</span>',d:300},
+  {t:'<span class="ok">  ✓</span> 发现项目使用 TypeScript + ESM 规范',d:350},
+  {t:'',d:150},
+
+  {t:'<span class="r">[grep]</span> 检查是否已有日期工具...',d:400},
+  {t:'<span class="r">  →</span> pattern: <span class="str">"formatDate|date-utils"</span>',d:300},
+  {t:'<span class="ok">  ✓</span> 未找到重复，可以安全创建',d:350},
+  {t:'',d:150},
+
+  {t:'<span class="d">&#x25B8; 分析完毕，开始生成代码...</span>',d:400},
+  {t:'',d:100},
+
+  {t:'<span class="w">[write]</span> 创建新文件',d:450},
+  {t:'<span class="w">  →</span> filePath: <span class="str">"src/utils.ts"</span>',d:300},
+  {t:'<span class="w">  →</span> content:',d:200},
+  {t:'<span class="d">    ┌───────────────────────────────────┐</span>',d:100},
+  {t:'<span class="d">    │</span> <span class="kw">export function</span> <span class="fn">formatDate</span>(<span class="prop">date</span>: Date): <span class="hl">string</span> <span class="d">{</span>',d:150},
+  {t:'<span class="d">    │</span>   <span class="kw">return</span> date.<span class="fn">toLocaleDateString</span>(<span class="str">"zh-CN"</span>);',d:150},
+  {t:'<span class="d">    │</span> }',d:100},
+  {t:'<span class="d">    └───────────────────────────────────┘</span>',d:200},
+  {t:'<span class="ok">  ✓</span> 文件已写入: src/utils.ts',d:400},
+  {t:'',d:200},
+
+  {t:'<span class="b">[bash]</span> 运行类型检查...',d:400},
+  {t:'<span class="b">  →</span> command: <span class="str">"npx tsc --noEmit"</span>',d:500},
+  {t:'<span class="ok">  ✓</span> 类型检查通过，无错误',d:400},
+  {t:'',d:150},
+
+  {t:'<span class="d">────────────────────────────────</span>',d:200},
+  {t:'<span class="ok">&#x2705; 完成！</span> 已创建 <span class="str">src/utils.ts</span>，包含 <span class="fn">formatDate</span> 函数。',d:300},
+  {t:'<span class="d">   共调用 4 个工具: glob → read → grep → write → bash</span>',d:300},
+];
+
+let running=false;
+function runDemo(){
+  if(running)return;running=true;
+  document.getElementById('btnGo').disabled=true;
+  document.getElementById('btnRst').disabled=false;
+  const body=document.getElementById('termBody');
+  body.innerHTML='';
+  let i=0;
+  function next(){
+    if(i>=script.length){running=false;return}
+    const s=script[i];
+    const el=document.createElement('div');
+    el.className='tl';
+    el.innerHTML=s.t||'&nbsp;';
+    body.appendChild(el);
+    body.scrollTop=body.scrollHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('v')));
+    i++;
+    setTimeout(next,s.d);
+  }
+  next();
+}
+function resetDemo(){
+  running=false;
+  document.getElementById('termBody').innerHTML='<div class="tl v"><span class="d">$ </span>等待你的指令...</div>';
+  document.getElementById('btnGo').disabled=false;
+  document.getElementById('btnRst').disabled=true;
+}
+</script>
+</body>
+</html>

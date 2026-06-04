@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill & MCP — 30 秒搞懂 AI 的「脑」与「手」</title>
+<style>
+:root {
+  --bg:        #080c14;
+  --surface:   rgba(255,255,255,0.04);
+  --glass:     rgba(255,255,255,0.06);
+  --border:    rgba(255,255,255,0.08);
+  --text:      #e2e8f0;
+  --text-dim:  #7a8ba5;
+  --skill:     #f59e0b;
+  --skill-bg:  rgba(245,158,11,0.08);
+  --mcp:       #22d3ee;
+  --mcp-bg:    rgba(34,211,238,0.08);
+  --link:      #a78bfa;
+  --radius:    20px;
+  --radius-sm: 12px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Menlo, monospace;
+}
+
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── ambient bg ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 900px 600px at 15% 20%, rgba(245,158,11,0.06), transparent 70%),
+    radial-gradient(ellipse 800px 500px at 85% 70%, rgba(34,211,238,0.06), transparent 70%),
+    radial-gradient(ellipse 600px 600px at 50% 50%, rgba(167,139,250,0.03), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── noise texture ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── layout ── */
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+section {
+  padding: 6rem 0;
+}
+
+/* ── hero ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .4rem 1rem;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  font-size: .8rem;
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+  backdrop-filter: blur(12px);
+}
+
+.hero-badge .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%     { opacity:.4; transform:scale(.7); }
+}
+
+.hero h1 {
+  font-size: clamp(2.6rem, 7vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+}
+
+.hero h1 .s { color: var(--skill); }
+.hero h1 .m { color: var(--mcp); }
+
+.hero .sub {
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: var(--text-dim);
+  max-width: 600px;
+  font-weight: 300;
+}
+
+.hero .one-line {
+  margin-top: 2.5rem;
+  padding: 1.2rem 2rem;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--skill-bg), var(--mcp-bg));
+  border: 1px solid var(--border);
+  font-size: 1.1rem;
+  font-weight: 500;
+  max-width: 700px;
+  backdrop-filter: blur(16px);
+}
+
+.hero .one-line .hl-s { color: var(--skill); font-weight: 700; }
+.hero .one-line .hl-m { color: var(--mcp); font-weight: 700; }
+
+.scroll-cue {
+  margin-top: 4rem;
+  animation: float 3s ease-in-out infinite;
+  color: var(--text-dim);
+  font-size: .85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .3rem;
+}
+.scroll-cue span:last-child { font-size: 1.2rem; }
+
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(8px); }
+}
+
+/* ── section heading ── */
+.sec-head {
+  margin-bottom: 3rem;
+}
+.sec-head .num {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: .5rem;
+}
+.sec-head h2 {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* ── glass card ── */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── bento grid ── */
+.bento {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.bento-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.bento-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.bento-hero {
+  grid-template-columns: 1fr 1.2fr;
+  grid-template-rows: auto auto;
+}
+
+@media (max-width: 768px) {
+  .bento-2, .bento-3, .bento-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bento > .span-2 {
+  grid-column: 1 / -1;
+}
+
+.card {
+  padding: 2rem;
+  transition: transform .35s cubic-bezier(.25,.8,.25,1), box-shadow .35s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+}
+
+.card.skill-card:hover { box-shadow: 0 12px 48px rgba(245,158,11,0.1); }
+.card.mcp-card:hover   { box-shadow: 0 12px 48px rgba(34,211,238,0.1); }
+
+.card .card-icon {
+  width: 48px; height: 48px;
+  border-radius: var(--radius-sm);
+  display: grid; place-items: center;
+  font-size: 1.3rem;
+  margin-bottom: 1.2rem;
+}
+
+.skill-card .card-icon { background: var(--skill-bg); }
+.mcp-card  .card-icon  { background: var(--mcp-bg); }
+
+.card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: .5rem;
+}
+
+.card p {
+  color: var(--text-dim);
+  font-size: .92rem;
+}
+
+.card .tag {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .2rem .6rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+.skill-card .tag { background: var(--skill-bg); color: var(--skill); }
+.mcp-card  .tag  { background: var(--mcp-bg);  color: var(--mcp); }
+
+/* ── comparison table ── */
+.cmp-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: .9rem;
+  overflow: hidden;
+}
+.cmp-table th {
+  padding: 1rem 1.2rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: .85rem;
+  background: rgba(255,255,255,0.02);
+}
+.cmp-table th:nth-child(2) { color: var(--skill); }
+.cmp-table th:nth-child(3) { color: var(--mcp); }
+.cmp-table td {
+  padding: .85rem 1.2rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.cmp-table td:first-child {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── analogy visual ── */
+.analogy-visual {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .analogy-visual {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .analogy-visual .a-arrow { transform: rotate(90deg); justify-self: center; }
+}
+
+.analogy-node {
+  text-align: center;
+  padding: 1.5rem;
+}
+.analogy-node .big-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: .8rem;
+}
+.analogy-node h4 {
+  font-size: 1rem;
+  margin-bottom: .3rem;
+}
+.analogy-node p {
+  color: var(--text-dim);
+  font-size: .85rem;
+}
+
+.a-arrow {
+  font-size: 1.5rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ── interactive demo ── */
+.demo-area {
+  padding: 2.5rem;
+}
+
+.demo-terminal {
+  background: rgba(0,0,0,0.4);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .8rem 1rem;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+}
+.demo-bar .dot-r { width:10px;height:10px;border-radius:50%;background:#ef4444; }
+.demo-bar .dot-y { width:10px;height:10px;border-radius:50%;background:#f59e0b; }
+.demo-bar .dot-g { width:10px;height:10px;border-radius:50%;background:#22c55e; }
+.demo-bar .title { margin-left:.5rem; font-size:.75rem; color:var(--text-dim); font-family:var(--mono); }
+
+.demo-body {
+  padding: 1.5rem;
+  min-height: 300px;
+  font-family: var(--mono);
+  font-size: .82rem;
+  line-height: 1.8;
+}
+
+.demo-line {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .4s, transform .4s;
+}
+.demo-line.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.demo-line .prompt { color: var(--skill); }
+.demo-line .tool   { color: var(--mcp); }
+.demo-line .result { color: #34d399; }
+.demo-line .dim    { color: var(--text-dim); }
+
+.demo-controls {
+  display: flex;
+  gap: .8rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: .6rem 1.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--glass);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: .85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .25s;
+  backdrop-filter: blur(12px);
+}
+.btn:hover {
+  background: rgba(255,255,255,0.1);
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn.primary {
+  background: linear-gradient(135deg, var(--skill), #d97706);
+  border-color: transparent;
+  color: #000;
+  font-weight: 700;
+}
+.btn.primary:hover {
+  box-shadow: 0 4px 24px rgba(245,158,11,0.3);
+}
+.btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ── flow animation ── */
+.flow-anim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  padding: 2rem 0;
+}
+
+.flow-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.2rem 1.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  border: 1px solid var(--border);
+  min-width: 140px;
+  text-align: center;
+  transition: border-color .3s, box-shadow .3s;
+  position: relative;
+}
+
+.flow-node.active {
+  border-color: var(--skill);
+  box-shadow: 0 0 20px rgba(245,158,11,0.15);
+}
+.flow-node.active-mcp {
+  border-color: var(--mcp);
+  box-shadow: 0 0 20px rgba(34,211,238,0.15);
+}
+
+.flow-node .step-num {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: .75rem;
+  font-weight: 700;
+  margin-bottom: .6rem;
+}
+
+.flow-node:nth-child(1) .step-num { background: rgba(255,255,255,0.08); color: var(--text); }
+.flow-node:nth-child(3) .step-num { background: var(--skill-bg); color: var(--skill); }
+.flow-node:nth-child(5) .step-num { background: var(--mcp-bg); color: var(--mcp); }
+.flow-node:nth-child(7) .step-num { background: var(--skill-bg); color: var(--skill); }
+.flow-node:nth-child(9) .step-num { background: rgba(52,211,153,0.12); color: #34d399; }
+
+.flow-node h5 { font-size: .85rem; margin-bottom: .2rem; }
+.flow-node p  { font-size: .72rem; color: var(--text-dim); }
+
+.flow-arrow {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+  padding: 0 .3rem;
+  opacity: .5;
+  transition: opacity .3s;
+}
+.flow-arrow.lit {
+  opacity: 1;
+  color: var(--skill);
+}
+
+@media (max-width: 768px) {
+  .flow-anim { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); }
+}
+
+/* ── takeaway ── */
+.takeaway-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .takeaway-grid { grid-template-columns: 1fr; }
+}
+
+.takeaway-item {
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+.takeaway-item .num-big {
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--skill), var(--mcp));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: .8rem;
+}
+.takeaway-item h4 {
+  font-size: 1rem;
+  margin-bottom: .4rem;
+}
+.takeaway-item p {
+  color: var(--text-dim);
+  font-size: .85rem;
+}
+
+/* ── divider ── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 0 auto;
+  max-width: 600px;
+}
+
+/* ── footer ── */
+footer {
+  text-align: center;
+  padding: 4rem 1rem 3rem;
+  color: var(--text-dim);
+  font-size: .8rem;
+}
+footer a { color: var(--mcp); text-decoration: none; }
+
+/* ── animated entrance ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity .7s cubic-bezier(.25,.8,.25,1), transform .7s cubic-bezier(.25,.8,.25,1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> AI Agent 核心概念 · 零门槛版</div>
+  <h1><span class="s">Skill</span> &amp; <span class="m">MCP</span></h1>
+  <p class="sub">30 秒搞懂 AI 的「脑」与「手」</p>
+  <div class="one-line reveal">
+    AI 就像一位<span class="hl-s">只读菜谱但碰不到灶台的厨神</span> ——<br>
+    <span class="hl-s">Skill 是菜谱</span>（知识），<span class="hl-m">MCP 是灶台接口</span>（能力），两者配合才能做出真菜。
+  </div>
+  <div class="scroll-cue">
+    <span>向下滚动</span>
+    <span>&#x25BE;</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ 01 类比 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">01 / 类比</div>
+    <h2>请想象这样一个厨房</h2>
+  </div>
+
+  <div class="glass card span-2 reveal" style="padding:0;overflow:hidden;">
+    <div class="analogy-visual">
+      <div class="analogy-node">
+        <span class="big-icon">&#x1F468;&#x200D;&#x1F373;</span>
+        <h4>AI（厨神）</h4>
+        <p>无所不知，但<br>手碰不到任何东西</p>
+      </div>
+      <div class="a-arrow">&#x1F4D6;</div>
+      <div class="analogy-node">
+        <span class="big-icon" style="color:var(--skill)">&#x1F4D6;</span>
+        <h4 style="color:var(--skill)">Skill（菜谱）</h4>
+        <p>告诉厨神该做什么菜、<br>按什么顺序、什么标准</p>
+      </div>
+      <div class="a-arrow">&#x1F527;</div>
+      <div class="analogy-node">
+        <span class="big-icon" style="color:var(--mcp)">&#x1F50C;</span>
+        <h4 style="color:var(--mcp)">MCP（万能插座）</h4>
+        <p>标准接口，连接真实的<br>灶台、冰箱、食材库</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bento bento-2" style="margin-top:1.25rem;">
+    <div class="glass card skill-card reveal">
+      <span class="tag">Skill · 菜谱</span>
+      <div class="card-icon">&#x1F4D6;</div>
+      <h3>本质：一份 Markdown 指南</h3>
+      <p>存放在 <code>.opencode/skills/</code> 目录。包含触发条件、工作步骤、输出格式。AI 读了就知道"这道菜怎么做"。</p>
+    </div>
+    <div class="glass card mcp-card reveal">
+      <span class="tag">MCP · 万能插座</span>
+      <div class="card-icon">&#x1F50C;</div>
+      <h3>本质：一套标准通信协议</h3>
+      <p>Model Context Protocol。让 AI 通过 Tool / Resource / Prompt 三种原语，与真实的外部服务（API、数据库、文件系统）对话。</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 02 协作流程 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">02 / 协作流程</div>
+    <h2>当 Skill 遇上 MCP</h2>
+  </div>
+
+  <div class="flow-anim reveal" id="flowChart">
+    <div class="flow-node" id="fn1">
+      <div class="step-num">1</div>
+      <h5>用户提问</h5>
+      <p>"帮我订餐厅"</p>
+    </div>
+    <div class="flow-arrow" id="fa1">&#x27A1;</div>
+    <div class="flow-node" id="fn2">
+      <div class="step-num">2</div>
+      <h5>Skill 激活</h5>
+      <p>加载订餐流程指南</p>
+    </div>
+    <div class="flow-arrow" id="fa2">&#x27A1;</div>
+    <div class="flow-node" id="fn3">
+      <div class="step-num">3</div>
+      <h5>MCP 调用</h5>
+      <p>连接餐厅 API 下单</p>
+    </div>
+    <div class="flow-arrow" id="fa3">&#x27A1;</div>
+    <div class="flow-node" id="fn4">
+      <div class="step-num">4</div>
+      <h5>Skill 格式化</h5>
+      <p>按菜谱排版结果</p>
+    </div>
+    <div class="flow-arrow" id="fa4">&#x27A1;</div>
+    <div class="flow-node" id="fn5">
+      <div class="step-num">5</div>
+      <h5>交付结果</h5>
+      <p>用户收到确认信息</p>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--text-dim);font-size:.85rem;margin-top:1rem;">
+    &#x1F4A1; Skill 负责思考"MCP 负责动手，各司其职
+  </p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 03 对比 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">03 / 横向对比</div>
+    <h2>七个维度看清差异</h2>
+  </div>
+
+  <div class="glass reveal" style="overflow:hidden;border-radius:var(--radius);">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>&#x1F4D6; Skill（菜谱）</th>
+          <th>&#x1F50C; MCP（万能插座）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>是什么</td><td>一份 Markdown 指南文件</td><td>一个运行中的服务进程</td></tr>
+        <tr><td>在哪定义</td><td><code>.opencode/skills/</code></td><td><code>opencode.json</code> 配置</td></tr>
+        <tr><td>核心作用</td><td>教 AI <em>怎么想</em></td><td>让 AI <em>能动手</em></td></tr>
+        <tr><td>生活类比</td><td>菜谱书</td><td>厨房标准化插座</td></tr>
+        <tr><td>底层协议</td><td>无，纯文本约定</td><td>MCP 标准通信协议</td></tr>
+        <tr><td>能否独立</td><td>不能，只提供知识</td><td>能，可被任意客户端调用</td></tr>
+        <tr><td>典型例子</td><td>pdf skill、docx skill</td><td>web-reader、GitHub MCP</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 04 交互演示 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">04 / 交互演示</div>
+    <h2>亲手体验一次协作</h2>
+  </div>
+
+  <div class="glass demo-area reveal">
+    <p style="color:var(--text-dim);margin-bottom:1.2rem;font-size:.9rem;">
+      场景：你说「帮我查天气并推荐晚餐」，观察 Skill 和 MCP 如何配合完成任务。
+    </p>
+
+    <div class="demo-terminal">
+      <div class="demo-bar">
+        <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+        <span class="title">opencode agent</span>
+      </div>
+      <div class="demo-body" id="demoBody">
+        <div class="demo-line visible"><span class="dim">$ </span>等待你的指令...</div>
+      </div>
+    </div>
+
+    <div class="demo-controls">
+      <button class="btn primary" id="btnStart" onclick="startDemo()">&#x25B6; 开始演示</button>
+      <button class="btn" id="btnReset" onclick="resetDemo()" disabled>&#x21BA; 重置</button>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 05 知识锚点 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">05 / 记住这三条</div>
+    <h2>知识锚点</h2>
+  </div>
+
+  <div class="takeaway-grid">
+    <div class="glass card takeaway-item reveal">
+      <div class="num-big">01</div>
+      <h4>Skill = 知识</h4>
+      <p>它是一份指南，告诉 AI 在特定场景下应该怎么思考、怎么规划步骤。</p>
+    </div>
+    <div class="glass card takeaway-item reveal">
+      <div class="num-big">02</div>
+      <h4>MCP = 能力</h4>
+      <p>它是一套协议标准，让 AI 能连接真实世界——调 API、读写文件、操作数据库。</p>
+    </div>
+    <div class="glass card takeaway-item reveal">
+      <div class="num-big">03</div>
+      <h4>配合才有效</h4>
+      <p>只有知识没有能力 = 纸上谈兵；只有能力没有知识 = 蛮力乱撞。两者缺一不可。</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>Skill &amp; MCP 通俗图解 — 由 opencode 生成</p>
+</footer>
+
+<script>
+// ── Scroll reveal ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Flow chart auto-play ──
+const flowSteps = [
+  { node: 'fn1', arrow: null,    cls: 'active' },
+  { node: 'fn2', arrow: 'fa1',   cls: 'active' },
+  { node: 'fn3', arrow: 'fa2',   cls: 'active-mcp' },
+  { node: 'fn4', arrow: 'fa3',   cls: 'active' },
+  { node: 'fn5', arrow: 'fa4',   cls: 'active' },
+];
+
+let flowTimer = null;
+function autoPlayFlow() {
+  flowSteps.forEach(s => {
+    document.getElementById(s.node).classList.remove('active', 'active-mcp');
+  });
+  document.querySelectorAll('.flow-arrow').forEach(a => a.classList.remove('lit'));
+
+  let i = 0;
+  flowTimer = setInterval(() => {
+    if (i > 0) {
+      document.getElementById(flowSteps[i-1].node).classList.remove('active', 'active-mcp');
+    }
+    const step = flowSteps[i];
+    document.getElementById(step.node).classList.add(step.cls);
+    if (step.arrow) document.getElementById(step.arrow).classList.add('lit');
+    i++;
+    if (i >= flowSteps.length) {
+      clearInterval(flowTimer);
+      setTimeout(autoPlayFlow, 2500);
+    }
+  }, 1000);
+}
+
+const flowObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      autoPlayFlow();
+      flowObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.3 });
+flowObserver.observe(document.getElementById('flowChart'));
+
+// ── Interactive demo ──
+const demoScript = [
+  { text: '<span class="prompt">&#x1F4AC; 用户:</span> 帮我查一下北京今天的天气，然后推荐适合的晚餐', delay: 600 },
+  { text: '', delay: 300 },
+  { text: '<span class="dim">──────── Skill &#x1F4D6; 天气美食推荐 ────────</span>', delay: 400 },
+  { text: '<span class="dim">  &#x2713; 匹配到「天气 + 美食推荐」复合 Skill</span>', delay: 300 },
+  { text: '<span class="dim">  &#x2713; 工作流：查天气 → 判断温度 → 推荐菜系</span>', delay: 300 },
+  { text: '', delay: 200 },
+  { text: '<span class="tool">&#x1F50C; MCP 调用:</span> weather_server.get_weather("北京")', delay: 500 },
+  { text: '<span class="tool">  →</span> 连接天气 API...', delay: 400 },
+  { text: '<span class="result">  &#x2713; 返回:</span> 北京 · 晴 · 3°C · 北风 4 级', delay: 500 },
+  { text: '', delay: 200 },
+  { text: '<span class="dim">  &#x25B8; Skill 分析：气温低、有风 → 推荐热汤 / 火锅类</span>', delay: 400 },
+  { text: '', delay: 200 },
+  { text: '<span class="tool">&#x1F50C; MCP 调用:</span> restaurant_server.search("火锅", "北京", "今晚")', delay: 500 },
+  { text: '<span class="tool">  →</span> 连接餐厅 API...', delay: 400 },
+  { text: '<span class="result">  &#x2713; 返回:</span> 海底捞（朝阳店）19:00 有位', delay: 500 },
+  { text: '', delay: 200 },
+  { text: '<span class="dim">──────── Skill 格式化输出 ────────</span>', delay: 300 },
+  { text: '', delay: 100 },
+  { text: '<span class="prompt">&#x1F916; AI:</span> 北京今天晴但只有 3°C，风大，建议吃点热乎的！', delay: 300 },
+  { text: '<span class="prompt">    推荐：</span>海底捞火锅（朝阳店），19:00 有桌', delay: 300 },
+  { text: '<span class="prompt">    已找到 3 家备选，需要我帮你预订吗？</span>', delay: 300 },
+];
+
+let demoRunning = false;
+
+function startDemo() {
+  if (demoRunning) return;
+  demoRunning = true;
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnReset').disabled = false;
+
+  const body = document.getElementById('demoBody');
+  body.innerHTML = '';
+
+  let i = 0;
+  function next() {
+    if (i >= demoScript.length) {
+      demoRunning = false;
+      return;
+    }
+    const item = demoScript[i];
+    const el = document.createElement('div');
+    el.className = 'demo-line';
+    el.innerHTML = item.text || '&nbsp;';
+    body.appendChild(el);
+    body.scrollTop = body.scrollHeight;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.classList.add('visible');
+      });
+    });
+
+    i++;
+    setTimeout(next, item.delay);
+  }
+  next();
+}
+
+function resetDemo() {
+  demoRunning = false;
+  const body = document.getElementById('demoBody');
+  body.innerHTML = '<div class="demo-line visible"><span class="dim">$ </span>等待你的指令...</div>';
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnReset').disabled = true;
+}
+</script>
+
+</body>
+</html>
