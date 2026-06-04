@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenCode 运作机理 · 从启动到响应的完整旅程</title>
+<style>
+:root {
+  --bg:       #080c14;
+  --glass:    rgba(255,255,255,0.05);
+  --border:   rgba(255,255,255,0.07);
+  --text:     #e2e8f0;
+  --dim:      #7a8ba5;
+  --c-boot:   #f59e0b;
+  --c-ctx:    #60a5fa;
+  --c-config: #a78bfa;
+  --c-skill:  #34d399;
+  --c-mcp:    #22d3ee;
+  --c-mem:    #fb7185;
+  --c-proj:   #f472b6;
+  --radius:   18px;
+  --rsm:      12px;
+  --font: -apple-system,BlinkMacSystemFont,"SF Pro Display","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono: "SF Mono","Cascadia Code","Fira Code","Menlo",monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 900px 600px at 20% 25%,rgba(245,158,11,0.04),transparent 70%),
+  radial-gradient(ellipse 800px 500px at 80% 75%,rgba(96,165,250,0.04),transparent 70%)}
+body::after{content:'';position:fixed;inset:0;opacity:.02;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px}
+
+.container{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 1.5rem}
+section{padding:5rem 0}
+
+.glass{background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);max-width:480px;margin:0 auto}
+
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .6s cubic-bezier(.25,.8,.25,1),transform .6s cubic-bezier(.25,.8,.25,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+/* ── hero ── */
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem 1.5rem}
+.hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;background:var(--glass);border:1px solid var(--border);font-size:.75rem;color:var(--dim);margin-bottom:2rem;backdrop-filter:blur(12px)}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:#34d399;animation:pd 2s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.hero h1{font-size:clamp(2.2rem,6vw,4rem);font-weight:800;letter-spacing:-.04em;line-height:1.15;margin-bottom:1.2rem}
+.hero h1 .t{background:linear-gradient(135deg,var(--c-boot),var(--c-ctx));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .sub{font-size:clamp(.9rem,2vw,1.1rem);color:var(--dim);max-width:540px;font-weight:300}
+.hero .one-line{margin-top:2rem;padding:1rem 1.6rem;border-radius:var(--radius);background:linear-gradient(135deg,rgba(245,158,11,0.06),rgba(96,165,250,0.06));border:1px solid var(--border);font-size:.95rem;max-width:640px;backdrop-filter:blur(14px)}
+.scroll-cue{margin-top:3.5rem;animation:fl 3s ease-in-out infinite;color:var(--dim);font-size:.8rem;display:flex;flex-direction:column;align-items:center;gap:.2rem}
+.scroll-cue span:last-child{font-size:1.2rem}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+
+/* ── section head ── */
+.sec-head{margin-bottom:2.5rem}
+.sec-head .num{font-size:.7rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:.4rem}
+.sec-head h2{font-size:clamp(1.4rem,3vw,1.9rem);font-weight:700;letter-spacing:-.02em}
+
+/* ── tree ── */
+.file-tree{
+  font-family:var(--mono);font-size:.78rem;line-height:2;padding:1.5rem;
+  background:rgba(0,0,0,0.3);border-radius:var(--rsm);border:1px solid var(--border);
+  overflow-x:auto;
+}
+.file-tree .dir{color:var(--c-ctx);font-weight:600}
+.file-tree .file{color:var(--text)}
+.file-tree .cm{color:var(--dim);font-style:italic}
+.file-tree .hl-cfg{color:var(--c-config)}
+.file-tree .hl-skill{color:var(--c-skill)}
+.file-tree .hl-mcp{color:var(--c-mcp)}
+.file-tree .hl-mem{color:var(--c-mem)}
+.file-tree .indent{padding-left:1.4rem;display:block}
+
+/* ── cards grid ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.1rem}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+.card{padding:1.6rem;transition:transform .3s cubic-bezier(.25,.8,.25,1),box-shadow .3s}
+.card:hover{transform:translateY(-3px)}
+.card .icon{width:44px;height:44px;border-radius:var(--rsm);display:grid;place-items:center;font-size:1.1rem;margin-bottom:.9rem}
+.card h3{font-size:1rem;font-weight:700;margin-bottom:.35rem}
+.card p{color:var(--dim);font-size:.83rem}
+.card code{font-family:var(--mono);font-size:.76rem;background:rgba(255,255,255,0.06);padding:.1rem .3rem;border-radius:4px}
+
+/* color variants */
+.cv-boot .icon{background:rgba(245,158,11,0.1);color:var(--c-boot)}.cv-boot:hover{box-shadow:0 8px 36px rgba(245,158,11,0.1)}
+.cv-ctx  .icon{background:rgba(96,165,250,0.1);color:var(--c-ctx)}.cv-ctx:hover{box-shadow:0 8px 36px rgba(96,165,250,0.1)}
+.cv-cfg  .icon{background:rgba(167,139,250,0.1);color:var(--c-config)}.cv-cfg:hover{box-shadow:0 8px 36px rgba(167,139,250,0.1)}
+.cv-skill .icon{background:rgba(52,211,153,0.1);color:var(--c-skill)}.cv-skill:hover{box-shadow:0 8px 36px rgba(52,211,153,0.1)}
+.cv-mcp  .icon{background:rgba(34,211,238,0.1);color:var(--c-mcp)}.cv-mcp:hover{box-shadow:0 8px 36px rgba(34,211,238,0.1)}
+.cv-mem  .icon{background:rgba(251,113,133,0.1);color:var(--c-mem)}.cv-mem:hover{box-shadow:0 8px 36px rgba(251,113,133,0.1)}
+.cv-proj .icon{background:rgba(244,114,182,0.1);color:var(--c-proj)}.cv-proj:hover{box-shadow:0 8px 36px rgba(244,114,182,0.1)}
+
+/* ── code ── */
+.code-blk{background:rgba(0,0,0,0.35);border-radius:var(--rsm);overflow:hidden;border:1px solid var(--border);margin:1rem 0}
+.code-bar{display:flex;align-items:center;gap:.4rem;padding:.6rem 1rem;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)}
+.code-bar .d{width:8px;height:8px;border-radius:50%}.dr{background:#ef4444}.dy{background:#f59e0b}.dg{background:#22c55e}
+.code-bar .lbl{margin-left:.4rem;font-size:.68rem;color:var(--dim);font-family:var(--mono)}
+.code-body{padding:1.1rem 1.3rem;font-family:var(--mono);font-size:.75rem;line-height:1.85;overflow-x:auto}
+.cm{color:#6b7b8d}.kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.prop{color:#79c0ff}.hl{color:#ffa657}
+
+/* ── timeline ── */
+.timeline{position:relative;padding-left:2.5rem}
+.timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,var(--c-boot),var(--c-ctx),var(--c-skill),var(--c-mcp))}
+.tl-item{position:relative;margin-bottom:2rem;padding-left:1rem}
+.tl-item::before{
+  content:'';position:absolute;left:-2.5rem;top:.45rem;width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:var(--bg);z-index:1;
+}
+.tl-item:nth-child(1)::before{border-color:var(--c-boot);background:var(--c-boot)}
+.tl-item:nth-child(2)::before{border-color:var(--c-config);background:var(--c-config)}
+.tl-item:nth-child(3)::before{border-color:var(--c-skill);background:var(--c-skill)}
+.tl-item:nth-child(4)::before{border-color:var(--c-mcp);background:var(--c-mcp)}
+.tl-item:nth-child(5)::before{border-color:var(--c-ctx);background:var(--c-ctx)}
+.tl-item:nth-child(6)::before{border-color:var(--c-mem);background:var(--c-mem)}
+.tl-item:nth-child(7)::before{border-color:var(--c-proj);background:var(--c-proj)}
+
+.tl-item h4{font-size:.95rem;margin-bottom:.25rem}
+.tl-item p{color:var(--dim);font-size:.82rem}
+.tl-item .step-tag{
+  display:inline-block;font-size:.6rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  padding:.15rem .45rem;border-radius:4px;margin-right:.4rem;
+}
+.t1 .step-tag{background:rgba(245,158,11,0.12);color:var(--c-boot)}
+.t2 .step-tag{background:rgba(167,139,250,0.12);color:var(--c-config)}
+.t3 .step-tag{background:rgba(52,211,153,0.12);color:var(--c-skill)}
+.t4 .step-tag{background:rgba(34,211,238,0.12);color:var(--c-mcp)}
+.t5 .step-tag{background:rgba(96,165,250,0.12);color:var(--c-ctx)}
+.t6 .step-tag{background:rgba(251,113,133,0.12);color:var(--c-mem)}
+.t7 .step-tag{background:rgba(244,114,182,0.12);color:var(--c-proj)}
+
+/* ── context diagram ── */
+.ctx-diagram{display:flex;flex-direction:column;gap:.6rem;padding:1.5rem}
+.ctx-row{display:flex;align-items:center;gap:.8rem}
+.ctx-bar{height:36px;border-radius:8px;display:flex;align-items:center;padding:0 1rem;font-size:.75rem;font-weight:600;white-space:nowrap;transition:width .6s cubic-bezier(.25,.8,.25,1)}
+.ctx-label{font-size:.78rem;color:var(--dim);width:140px;flex-shrink:0;text-align:right}
+
+/* ── interactive demo ── */
+.demo-wrap{padding:2rem}
+.demo-hint{padding:.8rem 1.2rem;border-radius:var(--rsm);background:rgba(255,255,255,0.03);border:1px solid var(--border);font-size:.85rem;margin-bottom:1.2rem;color:var(--dim)}
+.demo-hint strong{color:var(--c-boot)}
+.terminal{background:rgba(0,0,0,0.4);border-radius:var(--rsm);border:1px solid var(--border);overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:.4rem;padding:.55rem 1rem;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)}
+.term-body{padding:1rem 1.2rem;min-height:240px;font-family:var(--mono);font-size:.75rem;line-height:1.85;overflow-y:auto;max-height:400px}
+.tl-line{opacity:0;transform:translateX(-6px);transition:opacity .3s,transform .3s}.tl-line.v{opacity:1;transform:translateX(0)}
+.demo-btns{display:flex;gap:.6rem;margin-top:1rem;flex-wrap:wrap}
+.btn{padding:.5rem 1.2rem;border-radius:var(--rsm);border:1px solid var(--border);background:var(--glass);color:var(--text);font-family:var(--font);font-size:.8rem;cursor:pointer;transition:all .22s;backdrop-filter:blur(10px)}
+.btn:hover{background:rgba(255,255,255,0.1);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--c-boot),#d97706);border-color:transparent;color:#000;font-weight:700}
+.btn.primary:hover{box-shadow:0 4px 18px rgba(245,158,11,0.3)}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none!important}
+
+footer{text-align:center;padding:3rem 1rem 2.5rem;color:var(--dim);font-size:.75rem}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> OpenCode 内部机制 · 深度解析</div>
+  <h1>从按下回车到<br><span class="t">AI 给出回答</span></h1>
+  <p class="sub">拆解 OpenCode 启动、加载配置、组装上下文、调用工具的完整旅程</p>
+  <div class="one-line reveal">
+    OpenCode 不是「一个」AI —— 它是一个<strong>编排引擎</strong>，负责把「配置 + 技能 + 工具 + 记忆 + 你的代码」组装成一条 Prompt，送给大模型执行。
+  </div>
+  <div class="scroll-cue"><span>向下滚动</span><span>&#x25BE;</span></div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ 01 目录结构 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">01 / 配置地图</div>
+    <h2>两个关键目录，各管各的</h2>
+  </div>
+
+  <div class="grid-2">
+    <div class="glass card cv-cfg reveal">
+      <div class="icon">&#x1F3E0;</div>
+      <h3>全局配置目录</h3>
+      <p style="margin-bottom:.8rem"><code>~/.config/opencode/</code><br>（你的电脑上是 <code>C:\Users\user\.config\opencode\</code>）</p>
+      <p>存放<strong>所有项目共享</strong>的设置：API 密钥、MCP 服务、全局技能、长期记忆。相当于「系统偏好设置」。</p>
+    </div>
+    <div class="glass card cv-proj reveal">
+      <div class="icon">&#x1F4C1;</div>
+      <h3>项目配置目录</h3>
+      <p style="margin-bottom:.8rem"><code>项目根目录/.opencode/</code><br>（你的项目是 <code>D:\OpenCode\.opencode\</code>）</p>
+      <p>存放<strong>单个项目专属</strong>的技能、记忆。可以随项目一起 Git 提交，团队共享。</p>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:1.1rem">
+    <div class="reveal">
+      <div class="file-tree">
+        <span class="dir">C:\Users\user\.config\opencode\</span><br>
+        <span class="indent"><span class="hl-cfg file">opencode.json</span>  <span class="cm">← 核心配置文件</span></span><br>
+        <span class="indent"><span class="dir">skills/</span>           <span class="cm">← 全局技能</span></span><br>
+        <span class="indent">  <span class="hl-skill file">Humanizer-zh-main/SKILL.md</span></span><br>
+        <span class="indent">  <span class="hl-skill file">literature-reader/SKILL.md</span></span><br>
+        <span class="indent"><span class="dir">memories/</span>         <span class="cm">← 长期记忆</span></span><br>
+        <span class="indent">  <span class="hl-mem file">long_term_memory.md</span></span><br>
+        <span class="indent"><span class="hl-mcp file">package.json</span>      <span class="cm">← 插件依赖</span></span>
+      </div>
+    </div>
+    <div class="reveal">
+      <div class="file-tree">
+        <span class="dir">D:\OpenCode\.opencode\</span><br>
+        <span class="indent"><span class="dir">skills/</span>           <span class="cm">← 项目专属技能（19 个）</span></span><br>
+        <span class="indent">  <span class="hl-skill file">pdf/SKILL.md</span></span><br>
+        <span class="indent">  <span class="hl-skill file">docx/SKILL.md</span></span><br>
+        <span class="indent">  <span class="hl-skill file">pptx/SKILL.md</span></span><br>
+        <span class="indent">  <span class="hl-skill file">xlsx/SKILL.md</span></span><br>
+        <span class="indent">  <span class="hl-skill file">mcp-builder/SKILL.md</span></span><br>
+        <span class="indent">  <span class="cm">...共 19 个 Skill</span></span><br>
+        <span class="indent"><span class="dir">memories/</span>         <span class="cm">← 项目记忆（空）</span></span><br>
+        <span class="indent"><span class="hl-mcp file">package.json</span>      <span class="cm">← 插件依赖</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 02 启动时间线 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">02 / 启动时间线</div>
+    <h2>你输入 opencode 后发生了什么？</h2>
+  </div>
+
+  <div class="timeline reveal">
+    <div class="tl-item t1">
+      <span class="step-tag">Step 1</span>
+      <h4 style="color:var(--c-boot)">读取全局配置</h4>
+      <p>加载 <code>C:\Users\user\.config\opencode\opencode.json</code>，获取 API 提供商（zhipuai）、模型、权限规则、MCP 服务列表。</p>
+    </div>
+    <div class="tl-item t2">
+      <span class="step-tag">Step 2</span>
+      <h4 style="color:var(--c-config)">合并项目配置</h4>
+      <p>扫描项目目录的 <code>opencode.json</code> 和 <code>.opencode/</code>，项目级配置会<strong>覆盖</strong>全局配置的同名项。</p>
+    </div>
+    <div class="tl-item t3">
+      <span class="step-tag">Step 3</span>
+      <h4 style="color:var(--c-skill)">扫描 Skill 目录</h4>
+      <p>遍历全局 + 项目两层的 <code>skills/*/SKILL.md</code>，把所有 Skill 的 name 和 description 注册到工具列表。</p>
+    </div>
+    <div class="tl-item t4">
+      <span class="step-tag">Step 4</span>
+      <h4 style="color:var(--c-mcp)">启动 MCP 服务</h4>
+      <p>对每个配置的 MCP 服务（context7、gh_grep、web-reader、zai-mcp-server），建立连接并获取其提供的工具列表。</p>
+    </div>
+    <div class="tl-item t5">
+      <span class="step-tag">Step 5</span>
+      <h4 style="color:var(--c-ctx)">组装 System Prompt</h4>
+      <p>把「角色说明 + 可用工具列表 + 权限规则 + AGENTS.md + Skill 列表」拼成完整的系统提示词。</p>
+    </div>
+    <div class="tl-item t6">
+      <span class="step-tag">Step 6</span>
+      <h4 style="color:var(--c-mem)">加载记忆</h4>
+      <p>读取 <code>memories/long_term_memory.md</code>（用户偏好、项目信息等），注入上下文，让 AI 记住你的习惯。</p>
+    </div>
+    <div class="tl-item t7">
+      <span class="step-tag">Step 7</span>
+      <h4 style="color:var(--c-proj)">就绪，等待输入</h4>
+      <p>TUI 界面渲染完成。你现在可以输入问题了——一切配置已就位。</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 03 配置文件解析 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">03 / 配置文件解析</div>
+    <h2>你的 opencode.json 里都有什么？</h2>
+  </div>
+
+  <div class="grid-2">
+    <div class="reveal">
+      <div class="code-blk">
+        <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">opencode.json · 你的实际配置</span></div>
+        <div class="code-body">
+          {<br>
+          &nbsp;&nbsp;<span class="prop">"$schema"</span>: <span class="str">"opencode.ai/config.json"</span>,<br><br>
+          &nbsp;&nbsp;<span class="cm">// ① API 提供商</span><br>
+          &nbsp;&nbsp;<span class="prop">"provider"</span>: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"zhipuai"</span>: { <span class="prop">"api"</span>: <span class="str">"https://open.bigmodel.cn/..."</span> },<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"zhipuai-vision"</span>: { <span class="cm">/* 视觉模型 */</span> }<br>
+          &nbsp;&nbsp;},<br><br>
+          &nbsp;&nbsp;<span class="cm">// ② 工具权限</span><br>
+          &nbsp;&nbsp;<span class="prop">"permission"</span>: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"bash"</span>: <span class="str">"allow"</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"edit"</span>: <span class="str">"allow"</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">/* ...全部 allow */</span><br>
+          &nbsp;&nbsp;},<br><br>
+          &nbsp;&nbsp;<span class="cm">// ③ MCP 服务</span><br>
+          &nbsp;&nbsp;<span class="prop">"mcp"</span>: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"context7"</span>: { <span class="prop">"type"</span>: <span class="str">"remote"</span>, <span class="prop">"url"</span>: <span class="str">"..."</span> },<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"gh_grep"</span>:  { <span class="prop">"type"</span>: <span class="str">"remote"</span>, <span class="prop">"url"</span>: <span class="str">"..."</span> },<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"web-reader"</span>: { <span class="cm">/* 远程 MCP */</span> },<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"zai-mcp-server"</span>: { <span class="prop">"type"</span>: <span class="str">"local"</span> }<br>
+          &nbsp;&nbsp;},<br><br>
+          &nbsp;&nbsp;<span class="cm">// ④ 启用哪些 MCP</span><br>
+          &nbsp;&nbsp;<span class="prop">"tools"</span>: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"web-reader"</span>: <span class="kw">true</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"context7"</span>: <span class="kw">true</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"gh_grep"</span>: <span class="kw">true</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"zai-mcp-server"</span>: <span class="kw">true</span><br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+      </div>
+    </div>
+    <div class="reveal" style="display:flex;flex-direction:column;gap:1rem">
+      <div class="glass card cv-cfg" style="padding:1.3rem">
+        <h3>&#x1F510; provider（提供商）</h3>
+        <p>告诉 OpenCode 用哪家 AI 模型。你用的是智谱 AI（GLM 系列）。也可以同时配多个提供商切换使用。</p>
+      </div>
+      <div class="glass card cv-boot" style="padding:1.3rem">
+        <h3>&#x1F6E1;&#xFE0F; permission（权限）</h3>
+        <p>每个工具的安全开关。<code>allow</code>=放行、<code>ask</code>=需确认、<code>deny</code>=禁止。你的配置全部放行。</p>
+      </div>
+      <div class="glass card cv-mcp" style="padding:1.3rem">
+        <h3>&#x1F50C; mcp（外部工具服务）</h3>
+        <p>配置远程或本地的 MCP 服务。<code>remote</code>=云端服务，<code>local</code>=本地启动的进程。</p>
+      </div>
+      <div class="glass card cv-skill" style="padding:1.3rem">
+        <h3>&#x1F527; tools（工具开关）</h3>
+        <p>控制哪些 MCP 服务的工具对 AI 可见。<code>true</code>=启用，<code>false</code>=禁用。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 04 上下文组装 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">04 / 上下文组装</div>
+    <h2>你的问题被包装成了什么？</h2>
+  </div>
+
+  <p style="color:var(--dim);margin-bottom:1.5rem;font-size:.88rem">
+    当你输入一句话后，OpenCode 并不是直接把这句话发给 AI。它会在前面拼上一个巨大的「系统提示词」，像这样：
+  </p>
+
+  <div class="ctx-diagram glass reveal">
+    <div class="ctx-row">
+      <span class="ctx-label">角色定义</span>
+      <div class="ctx-bar" style="width:100%;background:linear-gradient(90deg,rgba(245,158,11,0.25),rgba(245,158,11,0.05))">
+        <span style="color:var(--c-boot)">System: 你是 opencode，一个 AI 编程助手...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label">工具列表</span>
+      <div class="ctx-bar" style="width:85%;background:linear-gradient(90deg,rgba(34,211,238,0.25),rgba(34,211,238,0.05))">
+        <span style="color:var(--c-mcp)">内置: bash, read, write, edit, grep, glob...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label">MCP 工具</span>
+      <div class="ctx-bar" style="width:72%;background:linear-gradient(90deg,rgba(34,211,238,0.2),rgba(34,211,238,0.04))">
+        <span style="color:var(--c-mcp)">MCP: context7_query, gh_grep_search, webReader...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label">Skill 列表</span>
+      <div class="ctx-bar" style="width:65%;background:linear-gradient(90deg,rgba(52,211,153,0.25),rgba(52,211,153,0.05))">
+        <span style="color:var(--c-skill)">Skills: pdf, docx, pptx, xlsx, mcp-builder...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label">AGENTS.md</span>
+      <div class="ctx-bar" style="width:50%;background:linear-gradient(90deg,rgba(167,139,250,0.25),rgba(167,139,250,0.05))">
+        <span style="color:var(--c-config)">项目规则、代码风格、测试命令...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label">长期记忆</span>
+      <div class="ctx-bar" style="width:38%;background:linear-gradient(90deg,rgba(251,113,133,0.25),rgba(251,113,133,0.05))">
+        <span style="color:var(--c-mem)">用户偏好中文、Windows 环境...</span>
+      </div>
+    </div>
+    <div class="ctx-row">
+      <span class="ctx-label" style="color:var(--text);font-weight:600">你的消息</span>
+      <div class="ctx-bar" style="width:30%;background:linear-gradient(90deg,rgba(255,255,255,0.15),rgba(255,255,255,0.04))">
+        <span>帮我写一个函数</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="color:var(--dim);margin-top:1.2rem;font-size:.82rem;text-align:center">
+    &#x1F4A1; 这整条「三明治」就是 AI 实际收到的内容。你的问题只占很小一段，但前面的上下文决定了 AI <em>怎么回答</em>。
+  </p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 05 配置优先级 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">05 / 配置优先级</div>
+    <h2>谁说了算？</h2>
+  </div>
+
+  <div class="glass reveal" style="overflow:hidden;border-radius:var(--radius)">
+    <table style="width:100%;border-collapse:collapse;font-size:.84rem">
+      <thead>
+        <tr style="background:rgba(255,255,255,0.02)">
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;font-size:.78rem;width:40px">层</th>
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;font-size:.78rem">来源</th>
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;font-size:.78rem">路径</th>
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;font-size:.78rem">优先级</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:.7rem 1rem;color:var(--dim)">1</td><td style="padding:.7rem 1rem">远程组织配置</td><td style="padding:.7rem 1rem"><code>.well-known/opencode</code></td><td style="padding:.7rem 1rem;color:var(--dim)">最低</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:.7rem 1rem;color:var(--dim)">2</td><td style="padding:.7rem 1rem;color:var(--c-cfg);font-weight:600">全局配置</td><td style="padding:.7rem 1rem"><code>~/.config/opencode/opencode.json</code></td><td style="padding:.7rem 1rem">&#x2191;</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:.7rem 1rem;color:var(--dim)">3</td><td style="padding:.7rem 1rem;color:var(--c-proj);font-weight:600">项目配置</td><td style="padding:.7rem 1rem"><code>项目/opencode.json</code></td><td style="padding:.7rem 1rem">&#x2191;</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:.7rem 1rem;color:var(--dim)">4</td><td style="padding:.7rem 1rem">.opencode 目录</td><td style="padding:.7rem 1rem"><code>项目/.opencode/</code></td><td style="padding:.7rem 1rem">&#x2191;</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:.7rem 1rem;color:var(--dim)">5</td><td style="padding:.7rem 1rem">环境变量覆盖</td><td style="padding:.7rem 1rem"><code>OPENCODE_CONFIG_CONTENT</code></td><td style="padding:.7rem 1rem;color:var(--c-boot);font-weight:600">最高</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="color:var(--dim);margin-top:1rem;font-size:.82rem">
+    &#x27A1; 规则很简单：<strong>越靠近项目的配置，优先级越高</strong>。就像公司制度 > 部门规章 > 个人偏好，局部覆盖全局。
+  </p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 06 交互演示 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">06 / 交互演示</div>
+    <h2>亲手体验启动流程</h2>
+  </div>
+
+  <div class="glass demo-wrap reveal">
+    <div class="demo-hint">
+      &#x1F3AF; 模拟你输入 <strong>opencode</strong> 命令后的启动过程，观察每一步加载了什么。
+    </div>
+
+    <div class="terminal">
+      <div class="term-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">opencode startup log</span></div>
+      <div class="term-body" id="termBody">
+        <div class="tl-line v"><span style="color:var(--dim)">$ </span>等待启动...</div>
+      </div>
+    </div>
+
+    <div class="demo-btns">
+      <button class="btn primary" id="btnGo" onclick="runDemo()">&#x25B6; 启动 OpenCode</button>
+      <button class="btn" id="btnRst" onclick="resetDemo()" disabled>&#x21BA; 重置</button>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 07 记忆系统 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">07 / 记忆系统</div>
+    <h2>AI 怎么「记住」你的习惯？</h2>
+  </div>
+
+  <div class="grid-3">
+    <div class="glass card cv-mem reveal">
+      <div class="icon">&#x1F9E0;</div>
+      <h3>长期记忆</h3>
+      <p><code>memories/long_term_memory.md</code><br><br>跨会话持久保存。记录你的编码偏好、常用语言、项目信息。每次启动都会加载。</p>
+    </div>
+    <div class="glass card cv-ctx reveal">
+      <div class="icon">&#x1F4AC;</div>
+      <h3>会话上下文</h3>
+      <p>当前对话的完整历史。<br><br>你说的每句话、AI 的每次回复、工具调用的结果，都累积在上下文窗口中。超出时会自动压缩（compaction）。</p>
+    </div>
+    <div class="glass card cv-skill reveal">
+      <div class="icon">&#x1F4D1;</div>
+      <h3>AGENTS.md</h3>
+      <p>项目根目录的规则文件。<br><br>相当于给 AI 的「项目说明书」——告诉它代码风格、测试命令、项目架构。可以被 Git 管理，团队共享。</p>
+    </div>
+  </div>
+
+  <div class="code-blk reveal" style="margin-top:1.2rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">memories/long_term_memory.md · 你的实际记忆</span></div>
+    <div class="code-body">
+      <span class="cm"># 长期记忆</span><br><br>
+      <span class="kw">## 用户偏好</span><br>
+      <span class="prop">语言偏好：</span><span class="str">中文</span><br>
+      <span class="prop">主要工作目录：</span><span class="str">D:\OpenCode</span><br>
+      <span class="prop">操作系统：</span><span class="str">Windows</span><br><br>
+      <span class="kw">## API 配置</span><br>
+      <span class="prop">Provider:</span> <span class="str">zhipuai (智谱 AI)</span><br><br>
+      <span class="kw">## 技能列表</span><br>
+      <span class="cm">已安装的自定义技能将在此处记录。</span><br><br>
+      <span class="cm">最后更新：2026-03-25</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ 08 知识锚点 ═══════════════ -->
+<section>
+  <div class="sec-head reveal">
+    <div class="num">08 / 记住这三条</div>
+    <h2>知识锚点</h2>
+  </div>
+
+  <div class="grid-3">
+    <div class="glass card cv-boot reveal" style="text-align:center">
+      <div style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--c-boot),var(--c-ctx));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">01</div>
+      <h4 style="margin:.5rem 0 .3rem">双层配置</h4>
+      <p style="color:var(--dim);font-size:.82rem">全局 <code>~/.config/opencode/</code> 管个人偏好，项目 <code>.opencode/</code> 管团队规则。项目配置覆盖全局。</p>
+    </div>
+    <div class="glass card cv-ctx reveal" style="text-align:center">
+      <div style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--c-ctx),var(--c-skill));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">02</div>
+      <h4 style="margin:.5rem 0 .3rem">上下文是拼图</h4>
+      <p style="color:var(--dim);font-size:.82rem">System Prompt = 角色定义 + 工具列表 + Skill + MCP + 记忆 + AGENTS.md。你的问题只占一小段。</p>
+    </div>
+    <div class="glass card cv-mem reveal" style="text-align:center">
+      <div style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--c-mem),var(--c-proj));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">03</div>
+      <h4 style="margin:.5rem 0 .3rem">记忆跨越会话</h4>
+      <p style="color:var(--dim);font-size:.82rem"><code>memories/long_term_memory.md</code> 让 AI 记住你的偏好，即使关掉 OpenCode 再打开也不会忘。</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>OpenCode 运作机理 · 深度解析 — 由 opencode 生成</footer>
+
+<script>
+const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')})},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+const demoScript=[
+  {t:'<span style="color:var(--c-boot)">&#x1F504; OpenCode v1.x 启动中...</span>',d:400},
+  {t:'',d:150},
+  {t:'<span style="color:var(--c-config)">[config]</span> 加载全局配置...',d:350},
+  {t:'<span style="color:var(--c-config)">  →</span> C:\\Users\\user\\.config\\opencode\\opencode.json',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> Provider: zhipuai (智谱 AI)',d:250},
+  {t:'<span style="color:#34d399">  ✓</span> Model: GLM-5.1',d:250},
+  {t:'<span style="color:#34d399">  ✓</span> 权限: 全部 allow',d:200},
+  {t:'',d:100},
+
+  {t:'<span style="color:var(--c-config)">[config]</span> 扫描项目配置...',d:350},
+  {t:'<span style="color:var(--c-config)">  →</span> D:\\OpenCode\\.opencode\\',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> 项目无独立 opencode.json（使用全局）',d:250},
+  {t:'',d:100},
+
+  {t:'<span style="color:var(--c-skill)">[skills]</span> 注册技能...',d:350},
+  {t:'<span style="color:var(--c-skill)">  →</span> 全局: Humanizer-zh, literature-reader',d:280},
+  {t:'<span style="color:var(--c-skill)">  →</span> 项目: pdf, docx, pptx, xlsx, mcp-builder ... 共 19 个',d:280},
+  {t:'<span style="color:#34d399">  ✓</span> 已注册 21 个 Skill',d:250},
+  {t:'',d:100},
+
+  {t:'<span style="color:var(--c-mcp)">[mcp]</span> 启动 MCP 服务...',d:400},
+  {t:'<span style="color:var(--c-mcp)">  →</span> context7 (remote) ... <span style="color:#34d399">连接成功</span>',d:350},
+  {t:'<span style="color:var(--c-mcp)">  →</span> gh_grep (remote) ... <span style="color:#34d399">连接成功</span>',d:350},
+  {t:'<span style="color:var(--c-mcp)">  →</span> web-reader (remote) ... <span style="color:#34d399">连接成功</span>',d:350},
+  {t:'<span style="color:var(--c-mcp)">  →</span> zai-mcp-server (local) ... <span style="color:#34d399">启动成功</span>',d:400},
+  {t:'<span style="color:#34d399">  ✓</span> 4 个 MCP 服务就绪',d:250},
+  {t:'',d:100},
+
+  {t:'<span style="color:var(--c-mem)">[memory]</span> 加载长期记忆...',d:350},
+  {t:'<span style="color:var(--c-mem)">  →</span> 语言: 中文 | 系统: Windows | 目录: D:\\OpenCode',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> 记忆已注入上下文',d:250},
+  {t:'',d:100},
+
+  {t:'<span style="color:var(--c-ctx)">[context]</span> 组装 System Prompt...',d:400},
+  {t:'<span style="color:var(--dim)">  角色定义 + 工具列表 (6 内置 + 12 MCP) + 21 Skill</span>',d:300},
+  {t:'<span style="color:var(--dim)">  + AGENTS.md + 长期记忆 + 权限规则</span>',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> System Prompt 组装完成',d:250},
+  {t:'',d:200},
+
+  {t:'<span style="color:var(--c-boot)">&#x2705; OpenCode 就绪！</span> 等待你的指令...',d:300},
+];
+
+let running=false;
+function runDemo(){
+  if(running)return;running=true;
+  document.getElementById('btnGo').disabled=true;
+  document.getElementById('btnRst').disabled=false;
+  const body=document.getElementById('termBody');
+  body.innerHTML='';
+  let i=0;
+  function next(){
+    if(i>=demoScript.length){running=false;return}
+    const s=demoScript[i];
+    const el=document.createElement('div');
+    el.className='tl-line';
+    el.innerHTML=s.t||'&nbsp;';
+    body.appendChild(el);
+    body.scrollTop=body.scrollHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('v')));
+    i++;
+    setTimeout(next,s.d);
+  }
+  next();
+}
+function resetDemo(){
+  running=false;
+  document.getElementById('termBody').innerHTML='<div class="tl-line v"><span style="color:var(--dim)">$ </span>等待启动...</div>';
+  document.getElementById('btnGo').disabled=false;
+  document.getElementById('btnRst').disabled=true;
+}
+</script>
+</body>
+</html>
