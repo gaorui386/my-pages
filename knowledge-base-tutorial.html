@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>本地知识库 · 从零搭建完整指南</title>
+<style>
+:root{
+  --bg:#080c14;--glass:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.07);
+  --text:#e2e8f0;--dim:#7a8ba5;
+  --c-arch:#f59e0b;--c-conv:#60a5fa;--c-idx:#a78bfa;--c-srch:#34d399;--c-src:#22d3ee;--c-upd:#fb7185;--c-ext:#f472b6;
+  --R:18px;--Rs:12px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"SF Mono","Cascadia Code","Fira Code","Menlo",monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 900px 600px at 15% 20%,rgba(245,158,11,0.04),transparent 70%),
+  radial-gradient(ellipse 800px 500px at 85% 75%,rgba(96,165,250,0.04),transparent 70%)}
+body::after{content:'';position:fixed;inset:0;opacity:.02;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px}
+.container{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 1.5rem}
+section{padding:4.5rem 0}
+.glass{background:var(--glass);border:1px solid var(--border);border-radius:var(--R);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);max-width:420px;margin:0 auto}
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s cubic-bezier(.25,.8,.25,1),transform .6s cubic-bezier(.25,.8,.25,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+/* nav */
+.side-nav{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:100;display:flex;flex-direction:column;gap:2px;padding:6px}
+.side-nav a{display:block;width:4px;height:22px;border-radius:2px;background:rgba(255,255,255,0.1);transition:all .3s;position:relative}
+.side-nav a:hover{background:rgba(255,255,255,0.3)}
+.side-nav a.active{width:4px;background:var(--c-arch)}
+.side-nav a .tip{position:absolute;left:14px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.85);color:var(--text);font-size:.68rem;padding:3px 8px;border-radius:4px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
+.side-nav a:hover .tip{opacity:1}
+@media(max-width:900px){.side-nav{display:none}}
+
+/* hero */
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem 1.5rem}
+.hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;background:var(--glass);border:1px solid var(--border);font-size:.73rem;color:var(--dim);margin-bottom:2rem}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:#34d399;animation:pd 2s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.hero h1{font-size:clamp(2rem,5.5vw,3.6rem);font-weight:800;letter-spacing:-.04em;line-height:1.15;margin-bottom:1rem}
+.hero h1 .t{background:linear-gradient(135deg,var(--c-arch),var(--c-srch));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .sub{font-size:clamp(.85rem,2vw,1.05rem);color:var(--dim);max-width:520px;font-weight:300}
+.hero .meta{margin-top:2rem;display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center}
+.hero .meta span{font-size:.75rem;color:var(--dim);padding:.3rem .8rem;border-radius:999px;background:var(--glass);border:1px solid var(--border)}
+.scroll-cue{margin-top:3rem;animation:fl 3s ease-in-out infinite;color:var(--dim);font-size:.78rem;display:flex;flex-direction:column;align-items:center;gap:.2rem}
+.scroll-cue span:last-child{font-size:1.2rem}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+
+/* section head */
+.sec-head{margin-bottom:2rem}
+.sec-head .num{font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);margin-bottom:.35rem}
+.sec-head h2{font-size:clamp(1.3rem,2.8vw,1.8rem);font-weight:700;letter-spacing:-.02em}
+.sec-head p{color:var(--dim);font-size:.88rem;margin-top:.4rem}
+
+/* grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+@media(max-width:768px){.g2,.g3{grid-template-columns:1fr}}
+
+/* card */
+.card{padding:1.5rem;transition:transform .3s cubic-bezier(.25,.8,.25,1),box-shadow .3s}
+.card:hover{transform:translateY(-3px)}
+.card .icon{width:42px;height:42px;border-radius:var(--Rs);display:grid;place-items:center;font-size:1.05rem;margin-bottom:.8rem}
+.card h3{font-size:.95rem;font-weight:700;margin-bottom:.3rem}
+.card p{color:var(--dim);font-size:.82rem;line-height:1.65}
+.card code{font-family:var(--mono);font-size:.74rem;background:rgba(255,255,255,0.06);padding:.1rem .3rem;border-radius:4px}
+
+.ca .icon{background:rgba(245,158,11,0.1);color:var(--c-arch)}.ca:hover{box-shadow:0 8px 32px rgba(245,158,11,0.08)}
+.cc .icon{background:rgba(96,165,250,0.1);color:var(--c-conv)}.cc:hover{box-shadow:0 8px 32px rgba(96,165,250,0.08)}
+.ci .icon{background:rgba(167,139,250,0.1);color:var(--c-idx)}.ci:hover{box-shadow:0 8px 32px rgba(167,139,250,0.08)}
+.cs .icon{background:rgba(52,211,153,0.1);color:var(--c-srch)}.cs:hover{box-shadow:0 8px 32px rgba(52,211,153,0.08)}
+.csr .icon{background:rgba(34,211,238,0.1);color:var(--c-src)}.csr:hover{box-shadow:0 8px 32px rgba(34,211,238,0.08)}
+.cu .icon{background:rgba(251,113,133,0.1);color:var(--c-upd)}.cu:hover{box-shadow:0 8px 32px rgba(251,113,133,0.08)}
+.ce .icon{background:rgba(244,114,182,0.1);color:var(--c-ext)}.ce:hover{box-shadow:0 8px 32px rgba(244,114,182,0.08)}
+
+/* code block */
+.code-blk{background:rgba(0,0,0,0.35);border-radius:var(--Rs);overflow:hidden;border:1px solid var(--border);margin:1rem 0}
+.code-bar{display:flex;align-items:center;gap:.4rem;padding:.55rem 1rem;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)}
+.code-bar .d{width:8px;height:8px;border-radius:50%}.dr{background:#ef4444}.dy{background:#f59e0b}.dg{background:#22c55e}
+.code-bar .lbl{margin-left:.4rem;font-size:.66rem;color:var(--dim);font-family:var(--mono)}
+.code-body{padding:1rem 1.2rem;font-family:var(--mono);font-size:.73rem;line-height:1.9;overflow-x:auto;white-space:pre}
+.cm{color:#6b7b8d}.kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.prop{color:#79c0ff}.hl{color:#ffa657}.ok{color:#34d399}
+
+/* file tree */
+.ftree{font-family:var(--mono);font-size:.74rem;line-height:2;padding:1.3rem;background:rgba(0,0,0,0.3);border-radius:var(--Rs);border:1px solid var(--border);overflow-x:auto}
+.ftree .dir{color:var(--c-conv);font-weight:600}.ftree .file{color:var(--text)}.ftree .cmt{color:var(--dim);font-style:italic}
+.ftree .ind{padding-left:1.4rem;display:block}
+
+/* pipeline */
+.pipe{display:flex;align-items:stretch;gap:0;margin:1.5rem 0}
+.pipe-step{flex:1;padding:1.1rem .8rem;text-align:center;background:var(--glass);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem}
+.pipe-step:first-child{border-radius:var(--Rs) 0 0 var(--Rs)}
+.pipe-step:last-child{border-radius:0 var(--Rs) var(--Rs) 0}
+.pipe-step .sn{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:.68rem;font-weight:700}
+.pipe-step h5{font-size:.78rem}.pipe-step p{font-size:.66rem;color:var(--dim)}
+.pipe-arr{display:flex;align-items:center;font-size:.9rem;color:var(--dim);padding:0 .1rem;background:var(--glass);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+@media(max-width:768px){.pipe{flex-direction:column}.pipe-step:first-child{border-radius:var(--Rs) var(--Rs) 0 0}.pipe-step:last-child{border-radius:0 0 var(--Rs) var(--Rs)}.pipe-arr{transform:rotate(90deg);justify-self:center;border:none}}
+.p1 .sn{background:rgba(245,158,11,0.12);color:var(--c-arch)}
+.p2 .sn{background:rgba(96,165,250,0.12);color:var(--c-conv)}
+.p3 .sn{background:rgba(167,139,250,0.12);color:var(--c-idx)}
+.p4 .sn{background:rgba(52,211,153,0.12);color:var(--c-srch)}
+.p5 .sn{background:rgba(34,211,238,0.12);color:var(--c-src)}
+
+/* search layers */
+.slayer{display:flex;align-items:center;gap:1rem;padding:1rem 1.3rem;border-radius:var(--Rs);background:var(--glass);border:1px solid var(--border);margin-bottom:.6rem;transition:border-color .3s}
+.slayer:hover{border-color:rgba(255,255,255,0.15)}
+.slayer .sn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.slayer .info h4{font-size:.88rem;margin-bottom:.15rem}.slayer .info p{font-size:.76rem;color:var(--dim)}
+.slayer .tag{font-size:.62rem;font-weight:600;padding:.15rem .5rem;border-radius:4px;margin-left:auto;flex-shrink:0}
+.s1 .sn{background:rgba(167,139,250,0.12);color:var(--c-idx)}.s1 .tag{background:rgba(167,139,250,0.1);color:var(--c-idx)}
+.s2 .sn{background:rgba(96,165,250,0.12);color:var(--c-conv)}.s2 .tag{background:rgba(96,165,250,0.1);color:var(--c-conv)}
+.s3 .sn{background:rgba(251,113,133,0.12);color:var(--c-upd)}.s3 .tag{background:rgba(251,113,133,0.1);color:var(--c-upd)}
+.s4 .sn{background:rgba(52,211,153,0.12);color:var(--c-srch)}.s4 .tag{background:rgba(52,211,153,0.1);color:var(--c-srch)}
+
+/* interactive demo */
+.demo-wrap{padding:2rem}
+.demo-hint{padding:.7rem 1.1rem;border-radius:var(--Rs);background:rgba(255,255,255,0.03);border:1px solid var(--border);font-size:.82rem;margin-bottom:1.1rem;color:var(--dim)}
+.demo-hint strong{color:var(--c-arch)}
+.terminal{background:rgba(0,0,0,0.4);border-radius:var(--Rs);border:1px solid var(--border);overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:.4rem;padding:.5rem 1rem;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)}
+.term-body{padding:1rem 1.1rem;min-height:220px;font-family:var(--mono);font-size:.72rem;line-height:1.85;overflow-y:auto;max-height:400px}
+.tl{opacity:0;transform:translateX(-5px);transition:opacity .3s,transform .3s}.tl.v{opacity:1;transform:translateX(0)}
+.demo-btns{display:flex;gap:.6rem;margin-top:1rem;flex-wrap:wrap}
+.btn{padding:.5rem 1.1rem;border-radius:var(--Rs);border:1px solid var(--border);background:var(--glass);color:var(--text);font-family:var(--font);font-size:.78rem;cursor:pointer;transition:all .22s}
+.btn:hover{background:rgba(255,255,255,0.1);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--c-arch),#d97706);border-color:transparent;color:#000;font-weight:700}
+.btn.primary:hover{box-shadow:0 4px 18px rgba(245,158,11,0.3)}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none!important}
+
+/* citation example */
+.cite-box{padding:1.3rem;border-radius:var(--Rs);border-left:3px solid var(--c-src);background:rgba(34,211,238,0.04);margin:1rem 0}
+.cite-box .src{font-size:.72rem;font-family:var(--mono);color:var(--c-src);margin-bottom:.5rem}
+.cite-box .content{font-size:.85rem;line-height:1.8;color:var(--text)}
+.cite-box .meta{font-size:.7rem;color:var(--dim);margin-top:.5rem;display:flex;gap:1rem;flex-wrap:wrap}
+.cite-box .meta span{display:flex;align-items:center;gap:.3rem}
+
+/* comparison table */
+.cmp{width:100%;border-collapse:separate;border-spacing:0;font-size:.82rem;overflow:hidden}
+.cmp th{padding:.75rem 1rem;text-align:left;font-weight:600;font-size:.75rem;background:rgba(255,255,255,0.02)}
+.cmp td{padding:.7rem 1rem;border-top:1px solid var(--border);color:var(--dim)}
+.cmp td:first-child{color:var(--text);font-weight:500;white-space:nowrap}
+
+footer{text-align:center;padding:3rem 1rem 2.5rem;color:var(--dim);font-size:.73rem}
+</style>
+</head>
+<body>
+
+<!-- side nav -->
+<nav class="side-nav" id="sideNav">
+  <a href="#s1" class="active"><span class="tip">架构总览</span></a>
+  <a href="#s2"><span class="tip">目录结构</span></a>
+  <a href="#s3"><span class="tip">转换流水线</span></a>
+  <a href="#s4"><span class="tip">索引生成</span></a>
+  <a href="#s5"><span class="tip">四层检索</span></a>
+  <a href="#s6"><span class="tip">来源溯源</span></a>
+  <a href="#s7"><span class="tip">增量更新</span></a>
+  <a href="#s8"><span class="tip">交互演示</span></a>
+  <a href="#s9"><span class="tip">RAG 预告</span></a>
+</nav>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> 本地知识库 · Phase 1 深度指南</div>
+  <h1>从零搭建<br><span class="t">本地知识库</span></h1>
+  <p class="sub">多格式文档 → 统一 Markdown → 精准检索 → 来源可溯</p>
+  <div class="meta">
+    <span>Phase 1：文件系统 + 直接匹配</span>
+    <span>支持 PDF / DOCX / TXT</span>
+    <span>零外部依赖</span>
+  </div>
+  <div class="scroll-cue"><span>向下滚动</span><span>&#x25BE;</span></div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ S1 架构 ═══════════════ -->
+<section id="s1">
+  <div class="sec-head reveal">
+    <div class="num">01 / 架构总览</div>
+    <h2>五步流水线，一条数据龙</h2>
+    <p>从"丢入文档"到"精准查询"，数据始终在本地流转，不依赖任何云端服务。</p>
+  </div>
+
+  <div class="pipe reveal">
+    <div class="pipe-step p1">
+      <div class="sn">1</div>
+      <h5>导入</h5>
+      <p>丢入原始文件</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p2">
+      <div class="sn">2</div>
+      <h5>转换</h5>
+      <p>统一转 Markdown</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p3">
+      <div class="sn">3</div>
+      <h5>索引</h5>
+      <p>生成目录+摘要</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p4">
+      <div class="sn">4</div>
+      <h5>检索</h5>
+      <p>四层精准查找</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p5">
+      <div class="sn">5</div>
+      <h5>溯源</h5>
+      <p>标注来源出处</p>
+    </div>
+  </div>
+
+  <div class="g3 reveal">
+    <div class="glass card ca">
+      <div class="icon">&#x1F512;</div>
+      <h3>全本地</h3>
+      <p>所有文件存储在本地磁盘，不传云端。数据安全完全可控。</p>
+    </div>
+    <div class="glass card cs">
+      <div class="icon">&#x1F3AF;</div>
+      <h3>可溯源</h3>
+      <p>每条查询结果精确标注：来源文件 / 页码 / 章节 / 行号。行业合规无忧。</p>
+    </div>
+    <div class="glass card cu">
+      <div class="icon">&#x267B;&#xFE0F;</div>
+      <h3>可增量</h3>
+      <p>新文档丢进来自动处理，索引动态更新。已有内容不受影响。</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S2 目录结构 ═══════════════ -->
+<section id="s2">
+  <div class="sec-head reveal">
+    <div class="num">02 / 目录结构</div>
+    <h2>知识库长什么样？</h2>
+    <p>一个清晰的目录是一切的基础。六层分离，各司其职。</p>
+  </div>
+
+  <div class="g2 reveal">
+    <div>
+      <div class="ftree">
+<span class="dir">knowledge-base/</span>
+<span class="ind"><span class="file">&#x1F4CB; index.json</span>  <span class="cmt">← 全局索引</span></span>
+<span class="ind"><span class="file">&#x2699;&#xFE0F; config.json</span>  <span class="cmt">← 知识库配置</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">sources/</span>  <span class="cmt">← 原始文档（只读）</span></span>
+<span class="ind">  <span class="file">交通流预测综述.pdf</span></span>
+<span class="ind">  <span class="file">行业报告-2026.docx</span></span>
+<span class="ind">  <span class="file">技术标准-GB39786.txt</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">markdown/</span>  <span class="cmt">← 转换后的 MD</span></span>
+<span class="ind">  <span class="file">交通流预测综述.md</span></span>
+<span class="ind">  <span class="file">行业报告-2026.md</span></span>
+<span class="ind">  <span class="file">技术标准-GB39786.md</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">summaries/</span>  <span class="cmt">← 摘要</span></span>
+<span class="ind">  <span class="file">_all_summaries.md</span>  <span class="cmt">← 汇总</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">metadata/</span>  <span class="cmt">← 元数据</span></span>
+<span class="ind">  <span class="file">交通流预测综述.json</span></span>
+<span class="ind">  <span class="file">行业报告-2026.json</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">images/</span>  <span class="cmt">← OCR / 提取图片</span></span>
+<span class="ind">  <span class="file">交通流预测综述_fig1.png</span></span>
+<span class="ind"></span>
+<span class="ind"><span class="dir">scripts/</span>  <span class="cmt">← 自动化脚本</span></span>
+<span class="ind">  <span class="file">convert.py</span></span>
+<span class="ind">  <span class="file">index_gen.py</span></span>
+<span class="ind">  <span class="file">search.py</span></span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="glass card ca" style="padding:1.2rem">
+        <h3><code>sources/</code> 原始文档</h3>
+        <p>只读，永不修改。所有溯源最终指向这里的原始文件。</p>
+      </div>
+      <div class="glass card cc" style="padding:1.2rem">
+        <h3><code>markdown/</code> 转换结果</h3>
+        <p>统一格式，方便 grep/read 检索。文件名与 sources/ 一一对应。</p>
+      </div>
+      <div class="glass card ci" style="padding:1.2rem">
+        <h3><code>metadata/</code> 元数据</h3>
+        <p>每篇文档一份 JSON：来源、页数、章节结构、关键词、转换时间。</p>
+      </div>
+      <div class="glass card cs" style="padding:1.2rem">
+        <h3><code>summaries/</code> 摘要</h3>
+        <p>快速预览相关性。_all_summaries.md 汇总所有文档摘要。</p>
+      </div>
+      <div class="glass card csr" style="padding:1.2rem">
+        <h3><code>images/</code> 图片</h3>
+        <p>从文档中提取的图片、OCR 结果。markdown/ 中用相对路径引用。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-blk reveal" style="margin-top:1.1rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">一键创建目录结构 · PowerShell</span></div>
+    <div class="code-body"><span class="kw">$base</span> = <span class="str">"D:\knowledge-base"</span>
+<span class="kw">$dirs</span> = @(<span class="str">"sources"</span>, <span class="str">"markdown"</span>, <span class="str">"summaries"</span>, <span class="str">"metadata"</span>, <span class="str">"images"</span>, <span class="str">"scripts"</span>)
+<span class="kw">foreach</span> (<span class="kw">$d</span> <span class="kw">in</span> <span class="kw">$dirs</span>) { New-Item -ItemType Directory -Path <span class="str">"$base\$d"</span> -Force }</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S3 转换流水线 ═══════════════ -->
+<section id="s3">
+  <div class="sec-head reveal">
+    <div class="num">03 / 转换流水线</div>
+    <h2>把一切变成 Markdown</h2>
+    <p>不同格式需要不同的转换策略，但输出统一为结构化的 .md 文件。</p>
+  </div>
+
+  <div class="g3 reveal">
+    <div class="glass card cc">
+      <div class="icon">&#x1F4D5;</div>
+      <h3>PDF → MD</h3>
+      <p>文字型 PDF 用 <code>pandoc</code> 或 <code>pdf skill</code>。扫描版需先 OCR（Tesseract）。表格用 <code>pdfplumber</code> 专门提取。</p>
+    </div>
+    <div class="glass card cc">
+      <div class="icon">&#x1F4C4;</div>
+      <h3>DOCX → MD</h3>
+      <p><code>pandoc</code> 是首选工具，保留标题层级、表格、图片引用。或用 opencode 的 <code>docx skill</code> 直接读取。</p>
+    </div>
+    <div class="glass card cc">
+      <div class="icon">&#x1F4C3;</div>
+      <h3>TXT → MD</h3>
+      <p>最简单。自动检测编码（UTF-8/GBK），添加标题和分段标记即可。</p>
+    </div>
+  </div>
+
+  <div class="g2 reveal" style="margin-top:1rem">
+    <div>
+      <div class="code-blk">
+        <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">metadata/交通流预测综述.json · 示例</span></div>
+        <div class="code-body">{
+  <span class="prop">"source_file"</span>: <span class="str">"sources/交通流预测综述.pdf"</span>,
+  <span class="prop">"title"</span>: <span class="str">"基于机器学习的交通流预测方法综述"</span>,
+  <span class="prop">"converted_at"</span>: <span class="str">"2026-06-04T14:30:00"</span>,
+  <span class="prop">"format"</span>: <span class="str">"pdf"</span>,
+  <span class="prop">"page_count"</span>: <span class="hl">12</span>,
+  <span class="prop">"md_file"</span>: <span class="str">"markdown/交通流预测综述.md"</span>,
+  <span class="prop">"hash"</span>: <span class="str">"a1b2c3d4..."</span>,
+  <span class="prop">"sections"</span>: [
+    { <span class="prop">"title"</span>: <span class="str">"摘要"</span>,
+      <span class="prop">"page"</span>: <span class="hl">1</span>,
+      <span class="prop">"line_start"</span>: <span class="hl">1</span>,
+      <span class="prop">"line_end"</span>: <span class="hl">28</span> },
+    { <span class="prop">"title"</span>: <span class="str">"2. 方法论"</span>,
+      <span class="prop">"page"</span>: <span class="hl">3</span>,
+      <span class="prop">"line_start"</span>: <span class="hl">82</span>,
+      <span class="prop">"line_end"</span>: <span class="hl">165</span> }
+  ],
+  <span class="prop">"keywords"</span>: [<span class="str">"交通流"</span>,<span class="str">"LSTM"</span>,<span class="str">"图神经网络"</span>],
+  <span class="prop">"quality"</span>: <span class="str">"auto"</span>
+}</div>
+      </div>
+    </div>
+    <div>
+      <div class="code-blk">
+        <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">转换命令 · 实操</span></div>
+        <div class="code-body"><span class="cm"># PDF 转 Markdown（保留结构）</span>
+pandoc <span class="str">"sources/论文.pdf"</span> -f pdf -t markdown \
+  --wrap=none -o <span class="str">"markdown/论文.md"</span>
+
+<span class="cm"># DOCX 转 Markdown（保留图片引用）</span>
+pandoc <span class="str">"sources/报告.docx"</span> -f docx -t markdown \
+  --extract-media=<span class="str">"./images"</span> \
+  -o <span class="str">"markdown/报告.md"</span>
+
+<span class="cm"># TXT 编码转换（GBK → UTF-8）</span>
+<span class="kw">python</span> scripts/convert.py \
+  --input <span class="str">"sources/标准.txt"</span> \
+  --output <span class="str">"markdown/标准.md"</span> \
+  --detect-encoding
+
+<span class="cm"># 或直接用 opencode 交互</span>
+<span class="cm">→ 请把 sources/论文.pdf 转为 markdown</span>
+<span class="cm">→ opencode 会调用 pdf skill 自动完成</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass reveal" style="padding:1.2rem 1.4rem;margin-top:1rem;border-radius:var(--Rs)">
+    <p style="font-size:.84rem">&#x26A0;&#xFE0F; <strong>转换质量检查清单</strong></p>
+    <ul style="color:var(--dim);font-size:.8rem;margin-top:.5rem;padding-left:1.2rem;line-height:2">
+      <li>页数是否对应？转换后段落数与原文件对比</li>
+      <li>表格结构是否完整？打开 MD 检查 Table 语法</li>
+      <li>公式是否保留？LaTeX 公式应保留为 <code>$...$</code> 或 <code>$$...$$</code></li>
+      <li>图片是否提取？检查 images/ 目录和 MD 中的引用路径</li>
+      <li>中文是否乱码？打开 MD 文件目视检查前几段</li>
+    </ul>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S4 索引生成 ═══════════════ -->
+<section id="s4">
+  <div class="sec-head reveal">
+    <div class="num">04 / 索引生成</div>
+    <h2>给知识库建一张"目录卡"</h2>
+    <p>index.json 是整个系统的核心——它记录每篇文档的位置、结构、关键词，让检索做到秒级定位。</p>
+  </div>
+
+  <div class="code-blk reveal">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">index.json · 全局索引</span></div>
+    <div class="code-body">{
+  <span class="prop">"version"</span>: <span class="str">"1.0"</span>,
+  <span class="prop">"updated_at"</span>: <span class="str">"2026-06-04T15:00:00"</span>,
+  <span class="prop">"total_documents"</span>: <span class="hl">3</span>,
+  <span class="prop">"documents"</span>: [
+    {
+      <span class="prop">"id"</span>: <span class="str">"doc_001"</span>,
+      <span class="prop">"title"</span>: <span class="str">"基于机器学习的交通流预测方法综述"</span>,
+      <span class="prop">"source"</span>: <span class="str">"sources/交通流预测综述.pdf"</span>,
+      <span class="prop">"markdown"</span>: <span class="str">"markdown/交通流预测综述.md"</span>,
+      <span class="prop">"metadata"</span>: <span class="str">"metadata/交通流预测综述.json"</span>,
+      <span class="prop">"summary"</span>: <span class="str">"本文系统综述了基于机器学习的..."</span>,
+      <span class="prop">"keywords"</span>: [<span class="str">"交通流"</span>, <span class="str">"LSTM"</span>, <span class="str">"GNN"</span>, <span class="str">"预测"</span>],
+      <span class="prop">"sections"</span>: [<span class="str">"摘要"</span>, <span class="str">"1.引言"</span>, <span class="str">"2.方法"</span>, <span class="str">"3.实验"</span>, <span class="str">"4.结论"</span>]
+    },
+    {
+      <span class="prop">"id"</span>: <span class="str">"doc_002"</span>,
+      <span class="prop">"title"</span>: <span class="str">"行业报告-2026"</span>,
+      <span class="prop">"source"</span>: <span class="str">"sources/行业报告-2026.docx"</span>,
+      <span class="prop">"markdown"</span>: <span class="str">"markdown/行业报告-2026.md"</span>,
+      <span class="prop">"keywords"</span>: [<span class="str">"市场分析"</span>, <span class="str">"趋势"</span>],
+      <span class="prop">"sections"</span>: [<span class="str">"概述"</span>, <span class="str">"数据统计"</span>, <span class="str">"结论建议"</span>]
+    }
+  ]
+}</div>
+  </div>
+
+  <div class="g2 reveal" style="margin-top:1rem">
+    <div class="glass card ci">
+      <div class="icon">&#x1F4CA;</div>
+      <h3>索引包含什么</h3>
+      <p>文档 ID、标题、源文件路径、MD 文件路径、关键词、章节列表、摘要预览。足以支撑目录导航和关键词初筛。</p>
+    </div>
+    <div class="glass card ci">
+      <div class="icon">&#x2699;&#xFE0F;</div>
+      <h3>如何生成</h3>
+      <p>扫描 <code>markdown/</code> 目录，提取每个 MD 文件的 <code>#</code> 标题结构，结合 metadata/*.json 生成。用脚本自动化，也可让 opencode 执行。</p>
+    </div>
+  </div>
+
+  <div class="code-blk reveal" style="margin-top:1rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">summaries/_all_summaries.md · 摘要汇总</span></div>
+    <div class="code-body"><span class="cm"># 知识库摘要汇总</span>
+<span class="cm">> 自动生成，最后更新：2026-06-04</span>
+
+<span class="cm">---</span>
+
+<span class="kw">## doc_001 · 基于机器学习的交通流预测方法综述</span>
+- 来源：<span class="str">sources/交通流预测综述.pdf</span>（12 页）
+- 摘要：本文系统综述了基于机器学习的交通流预测方法，涵盖
+  LSTM、GRU、GCN 等模型，在三个公开数据集上进行了对比实验。
+- 关键词：<span class="hl">交通流, LSTM, 图神经网络, 预测</span>
+
+<span class="kw">## doc_002 · 行业报告-2026</span>
+- 来源：<span class="str">sources/行业报告-2026.docx</span>（45 页）
+- 摘要：2026 年行业市场分析报告，包含市场规模、竞争格局...
+- 关键词：<span class="hl">市场分析, 趋势, 统计数据</span></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S5 四层检索 ═══════════════ -->
+<section id="s5">
+  <div class="sec-head reveal">
+    <div class="num">05 / 四层检索策略</div>
+    <h2>从宽到窄，层层逼近</h2>
+    <p>不一次读全文，而是逐层缩小范围——这是控制上下文消耗的核心。</p>
+  </div>
+
+  <div class="reveal">
+    <div class="slayer s1">
+      <div class="sn">L1</div>
+      <div class="info">
+        <h4>索引导航</h4>
+        <p>在 index.json 中匹配标题 / 关键词，找到相关文档 ID 和章节位置。</p>
+      </div>
+      <span class="tag">秒级 · O(1)</span>
+    </div>
+    <div class="slayer s2">
+      <div class="sn">L2</div>
+      <div class="info">
+        <h4>摘要预览</h4>
+        <p>读取 summaries/_all_summaries.md，判断文档是否与问题相关，排除无关内容。</p>
+      </div>
+      <span class="tag">秒级 · 少量 Token</span>
+    </div>
+    <div class="slayer s3">
+      <div class="sn">L3</div>
+      <div class="info">
+        <h4>正则精准定位</h4>
+        <p>在目标 MD 文件中用 grep/正则搜索关键词，定位到具体行号范围。</p>
+      </div>
+      <span class="tag">毫秒级 · 精确</span>
+    </div>
+    <div class="slayer s4">
+      <div class="sn">L4</div>
+      <div class="info">
+        <h4>精确读取</h4>
+        <p>按行号范围 read 目标段落，只返回命中内容 + 来源标注。</p>
+      </div>
+      <span class="tag">最小 Token</span>
+    </div>
+  </div>
+
+  <div class="code-blk reveal" style="margin-top:1.2rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">OpenCode 中的检索对话示例</span></div>
+    <div class="code-body"><span class="cm">&#x1F4AC; 你: 查一下知识库里关于 LSTM 交通流预测的内容</span>
+
+<span class="cm">&#x1F916; OpenCode:</span>
+
+<span class="ok">[L1] 扫描 index.json ...</span>
+  → 匹配到 <span class="str">doc_001</span>（交通流预测综述）
+  → 章节：2.方法（第82-165行）、3.实验（第166-230行）
+
+<span class="ok">[L2] 预览摘要 ...</span>
+  → doc_001 摘要确认包含 LSTM 相关内容
+
+<span class="ok">[L3] 精准搜索 ...</span>
+  grep(<span class="str">"LSTM|长短期记忆"</span>, <span class="str">"markdown/交通流预测综述.md"</span>)
+  → 命中：第 89 行、第 102-115 行、第 178 行
+
+<span class="ok">[L4] 读取目标段落 ...</span>
+  read(<span class="str">"markdown/交通流预测综述.md"</span>, offset=<span class="hl">88</span>, limit=<span class="hl">30</span>)</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S6 来源溯源 ═══════════════ -->
+<section id="s6">
+  <div class="sec-head reveal">
+    <div class="num">06 / 来源溯源</div>
+    <h2>每条结果都要"有据可查"</h2>
+    <p>行业场景下，"AI 说的"不算数，"文档写的"才算。每条返回结果必须携带来源标注。</p>
+  </div>
+
+  <div class="cite-box reveal">
+    <div class="src">&#x1F4C6; 来源标注</div>
+    <div class="content">
+      本文采用 LSTM（长短期记忆网络）对城市主干道的交通流量进行预测，实验结果表明，在三个公开数据集（PeMSD4、PeMSD8、PeMSD7(M)）上，LSTM 模型在 MAE 和 RMSE 指标上均优于传统 ARIMA 方法。
+    </div>
+    <div class="meta">
+      <span>&#x1F4C4; 来源：交通流预测综述.pdf</span>
+      <span>&#x1F4D1; 第 3 页 · 2.方法论</span>
+      <span>&#x1F4DD; markdown/交通流预测综述.md:89-115</span>
+      <span>&#x2705; 质量：已验证</span>
+    </div>
+  </div>
+
+  <div class="g2 reveal">
+    <div class="glass card csr" style="padding:1.2rem">
+      <h3>溯源三要素</h3>
+      <p style="margin-top:.5rem"><strong>1. 原始文件路径</strong> → sources/xxx.pdf<br>
+      <strong>2. 页码/章节</strong> → 第 X 页「章节名」<br>
+      <strong>3. 行号定位</strong> → markdown/xxx.md:行号范围</p>
+    </div>
+    <div class="glass card cs" style="padding:1.2rem">
+      <h3>溯源规范</h3>
+      <p style="margin-top:.5rem">&#x274C; 禁止 AI 改写原文后不加标注<br>
+      &#x274C; 禁止只给摘要不给原文引用<br>
+      &#x2705; 必须返回原文段落 + 三要素标注<br>
+      &#x2705; 可选附加 AI 总结，但需明确区分</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S7 增量更新 ═══════════════ -->
+<section id="s7">
+  <div class="sec-head reveal">
+    <div class="num">07 / 增量更新</div>
+    <h2>新文档进来，知识库自动进化</h2>
+    <p>不需要重建整个索引，只处理新增内容。</p>
+  </div>
+
+  <div class="pipe reveal">
+    <div class="pipe-step p1">
+      <div class="sn">1</div>
+      <h5>检测</h5>
+      <p>Hash 比对去重</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p2">
+      <div class="sn">2</div>
+      <h5>转换</h5>
+      <p>生成 MD 文件</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p3">
+      <div class="sn">3</div>
+      <h5>元数据</h5>
+      <p>生成 JSON</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p4">
+      <div class="sn">4</div>
+      <h5>索引</h5>
+      <p>追加到 index</p>
+    </div>
+    <div class="pipe-arr">&#x27A1;</div>
+    <div class="pipe-step p5">
+      <div class="sn">5</div>
+      <h5>摘要</h5>
+      <p>更新汇总</p>
+    </div>
+  </div>
+
+  <div class="code-blk reveal" style="margin-top:1rem">
+    <div class="code-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">增量更新流程 · 对话指令</span></div>
+    <div class="code-body"><span class="cm">&#x1F4AC; 你: 我在 sources/ 里放了 2 篇新论文，请更新知识库</span>
+
+<span class="cm">&#x1F916; OpenCode:</span>
+
+<span class="ok">1.</span> 扫描 sources/ 目录 ...
+<span class="ok">2.</span> 比对 metadata/ 中的 hash ...
+   → <span class="str">新论文-A.pdf</span>（未转换）
+   → <span class="str">新论文-B.pdf</span>（未转换）
+<span class="ok">3.</span> 转换为 Markdown ...
+   → <span class="ok">✓</span> markdown/新论文-A.md
+   → <span class="ok">✓</span> markdown/新论文-B.md
+<span class="ok">4.</span> 生成元数据 ...
+   → <span class="ok">✓</span> metadata/新论文-A.json
+   → <span class="ok">✓</span> metadata/新论文-B.json
+<span class="ok">5.</span> 更新 index.json（追加 doc_004, doc_005）
+<span class="ok">6.</span> 更新 summaries/_all_summaries.md
+<span class="ok">✓</span> 知识库已更新，现在共 5 篇文档。</div>
+  </div>
+
+  <div class="glass reveal" style="padding:1.2rem 1.4rem;margin-top:1rem;border-radius:var(--Rs)">
+    <p style="font-size:.84rem">&#x1F4A1; <strong>Hash 去重机制</strong></p>
+    <p style="color:var(--dim);font-size:.8rem;margin-top:.3rem">
+      每个文件转换前计算 SHA-256 Hash，与 metadata/*.json 中的 hash 字段比对。<br>
+      Hash 一致 = 已转换过，跳过。Hash 变化 = 文件被修改，重新转换。<br>
+      这保证了：同文件不重复转换，修改过的文件能被检测到。
+    </p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S8 交互演示 ═══════════════ -->
+<section id="s8">
+  <div class="sec-head reveal">
+    <div class="num">08 / 交互演示</div>
+    <h2>亲手体验完整流程</h2>
+    <p>模拟从"创建知识库"到"精准检索"的全过程。</p>
+  </div>
+
+  <div class="glass demo-wrap reveal">
+    <div class="demo-hint">
+      &#x1F3AF; 场景：你已经有几篇文献，现在要<strong>建库 → 转换 → 索引 → 查询</strong>，观察每一步发生了什么。
+    </div>
+
+    <div class="terminal">
+      <div class="term-bar"><span class="d dr"></span><span class="d dy"></span><span class="d dg"></span><span class="lbl">knowledge-base session</span></div>
+      <div class="term-body" id="termBody">
+        <div class="tl v"><span style="color:var(--dim)">$ </span>准备就绪...</div>
+      </div>
+    </div>
+
+    <div class="demo-btns">
+      <button class="btn primary" id="btnGo" onclick="runDemo()">&#x25B6; 开始全流程演示</button>
+      <button class="btn" id="btnRst" onclick="resetDemo()" disabled>&#x21BA; 重置</button>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ S9 RAG 预告 ═══════════════ -->
+<section id="s9">
+  <div class="sec-head reveal">
+    <div class="num">09 / Phase 2 预告</div>
+    <h2>当关键词匹配不够用时</h2>
+    <p>Phase 2 将引入语义检索（RAG），与 Phase 1 的精确匹配形成互补。</p>
+  </div>
+
+  <div class="glass reveal" style="overflow:hidden;border-radius:var(--R)">
+    <table class="cmp">
+      <thead>
+        <tr><th>对比维度</th><th>Phase 1（当前）</th><th>Phase 2（扩展）</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>检索方式</td><td>关键词 + 正则精确匹配</td><td>向量语义检索 + 正则验证</td></tr>
+        <tr><td>理解能力</td><td>"交通流"只能匹配这三个字</td><td>"交通流"也能找到"车流"、"拥堵预测"</td></tr>
+        <tr><td>精确度</td><td>字符级精确，不会错配</td><td>语义级近似，可能召回非目标</td></tr>
+        <tr><td>额外依赖</td><td>无</td><td>Embedding 模型 + ChromaDB</td></tr>
+        <tr><td>成本</td><td>零</td><td>本地免费 或 API 按量付费</td></tr>
+        <tr><td>适用场景</td><td>标准号、术语、公式、参数</td><td>"帮我找和这段话意思相近的内容"</td></tr>
+        <tr><td>推荐策略</td><td>单独使用</td><td>与 Phase 1 混合使用</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="g3 reveal" style="margin-top:1rem">
+    <div class="glass card ce">
+      <div class="icon">&#x1F9E8;</div>
+      <h3>Embedding 模型</h3>
+      <p>推荐 <code>bge-small-zh</code>（本地 CPU 可跑）或智谱 Embedding API。负责把文字变成向量。</p>
+    </div>
+    <div class="glass card ce">
+      <div class="icon">&#x1F4BE;</div>
+      <h3>ChromaDB</h3>
+      <p>轻量级向量数据库，纯 Python，零配置。存储文档向量，支持相似度查询。</p>
+    </div>
+    <div class="glass card ce">
+      <div class="icon">&#x1F504;</div>
+      <h3>混合检索</h3>
+      <p>RAG 语义召回 Top-10 → grep 精确验证 → 只返回经双重确认的结果。兼得广度与精度。</p>
+    </div>
+  </div>
+
+  <div class="glass reveal" style="padding:1.2rem 1.4rem;margin-top:1rem;border-radius:var(--Rs)">
+    <p style="font-size:.84rem">&#x1F4A1; <strong>建议</strong></p>
+    <p style="color:var(--dim);font-size:.8rem;margin-top:.3rem">
+      先用 Phase 1 跑通全流程，积累 50+ 篇文档后，如果你发现"关键词匹配找不到想要的内容"，再启动 Phase 2。届时所有 MD 文件已就绪，只需额外做 Embedding 即可，迁移成本几乎为零。
+    </p>
+  </div>
+</section>
+
+</div>
+
+<footer>本地知识库 · Phase 1 深度指南 — 由 opencode 生成</footer>
+
+<script>
+const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')})},{threshold:.1});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+// side nav highlight
+const sections=document.querySelectorAll('section[id]');
+const navLinks=document.querySelectorAll('.side-nav a');
+const navObs=new IntersectionObserver(e=>{e.forEach(x=>{
+  if(x.isIntersecting){
+    navLinks.forEach(l=>l.classList.remove('active'));
+    const link=document.querySelector(`.side-nav a[href="#${x.target.id}"]`);
+    if(link)link.classList.add('active');
+  }
+})},{threshold:.3,rootMargin:'-20% 0px -60% 0px'});
+sections.forEach(s=>navObs.observe(s));
+
+// demo
+const demoScript=[
+  {t:'<span style="color:var(--c-arch)">&#x1F4E6; Step 1: 创建知识库目录</span>',d:400},
+  {t:'<span style="color:var(--dim)">  $ mkdir D:\\knowledge-base\\{sources,markdown,summaries,metadata,images,scripts}</span>',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> 目录结构创建完成',d:300},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-conv)">&#x1F4C2; Step 2: 导入文档到 sources/</span>',d:400},
+  {t:'<span style="color:var(--dim)">  复制 3 个文件 → sources/</span>',d:250},
+  {t:'<span style="color:var(--dim)">  → 交通流预测综述.pdf (12页)</span>',d:200},
+  {t:'<span style="color:var(--dim)">  → 行业报告-2026.docx (45页)</span>',d:200},
+  {t:'<span style="color:var(--dim)">  → 技术标准-GB39786.txt</span>',d:200},
+  {t:'<span style="color:#34d399">  ✓</span> 3 个文件已就位',d:250},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-conv)">&#x1F504; Step 3: 转换为 Markdown</span>',d:400},
+  {t:'<span style="color:var(--c-conv)">  [convert]</span> 交通流预测综述.pdf → .md',d:350},
+  {t:'<span style="color:var(--c-conv)">  [convert]</span> 提取表格: 3 个 → Markdown Table',d:300},
+  {t:'<span style="color:var(--c-conv)">  [convert]</span> 提取图片: 5 个 → images/',d:300},
+  {t:'<span style="color:#34d399">  ✓</span> markdown/交通流预测综述.md',d:250},
+  {t:'<span style="color:var(--c-conv)">  [convert]</span> 行业报告-2026.docx → .md',d:350},
+  {t:'<span style="color:#34d399">  ✓</span> markdown/行业报告-2026.md',d:250},
+  {t:'<span style="color:var(--c-conv)">  [convert]</span> 技术标准-GB39786.txt (GBK→UTF-8) → .md',d:350},
+  {t:'<span style="color:#34d399">  ✓</span> markdown/技术标准-GB39786.md',d:250},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-idx)">&#x1F4CA; Step 4: 生成索引</span>',d:400},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 扫描 markdown/ ...',d:300},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 提取章节结构 ...',d:300},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 生成摘要 ...',d:300},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 写入 metadata/*.json (3份)',d:250},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 生成 index.json',d:250},
+  {t:'<span style="color:var(--c-idx)">  [index]</span> 生成 _all_summaries.md',d:250},
+  {t:'<span style="color:#34d399">  ✓</span> 索引生成完成，共 3 篇文档',d:300},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-srch)">&#x1F50D; Step 5: 模拟检索</span>',d:400},
+  {t:'<span style="color:var(--dim)">  &#x1F4AC; 查询: "LSTM 在交通流预测中的效果"</span>',d:350},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-idx)">  [L1]</span> 扫描 index.json ...',d:300},
+  {t:'<span style="color:var(--c-idx)">    →</span> 匹配: doc_001 (交通流预测综述)',d:250},
+  {t:'<span style="color:var(--c-idx)">    →</span> 章节: 2.方法论 (line 82-165), 3.实验 (line 166-230)',d:250},
+  {t:'',d:80},
+  {t:'<span style="color:var(--c-conv)">  [L2]</span> 预览摘要 ... 确认相关',d:250},
+  {t:'',d:80},
+  {t:'<span style="color:var(--c-upd)">  [L3]</span> grep("LSTM|长短期", "交通流预测综述.md")',d:350},
+  {t:'<span style="color:var(--c-upd)">    →</span> 命中: 第89行, 第102-115行, 第178行',d:300},
+  {t:'',d:80},
+  {t:'<span style="color:var(--c-srch)">  [L4]</span> read(offset=88, limit=30)',d:300},
+  {t:'',d:100},
+  {t:'<span style="color:var(--c-src)">&#x1F4C6; 检索结果（含来源标注）</span>',d:350},
+  {t:'<span style="color:#34d399">  ┌──────────────────────────────────┐</span>',d:100},
+  {t:'<span style="color:#34d399">  │</span> <span style="color:var(--c-src)">来源:</span> 交通流预测综述.pdf 第3页',d:100},
+  {t:'<span style="color:#34d399">  │</span> <span style="color:var(--c-src)">章节:</span> 2. 方法论',d:100},
+  {t:'<span style="color:#34d399">  │</span> <span style="color:var(--c-src)">定位:</span> markdown/...综述.md:89-115',d:100},
+  {t:'<span style="color:#34d399">  │</span>',d:50},
+  {t:'<span style="color:#34d399">  │</span> 本文采用 LSTM 对城市主干道交通流',d:100},
+  {t:'<span style="color:#34d399">  │</span> 量进行预测，在 PeMSD4 等三个公开',d:100},
+  {t:'<span style="color:#34d399">  │</span> 数据集上 MAE 和 RMSE 均优于 ARIMA',d:100},
+  {t:'<span style="color:#34d399">  └──────────────────────────────────┘</span>',d:200},
+  {t:'',d:100},
+  {t:'<span style="color:#34d399">&#x2705; 完成！从 3 篇文档中精准定位到 1 个段落，附带完整来源标注。</span>',d:400},
+];
+
+let running=false;
+function runDemo(){
+  if(running)return;running=true;
+  document.getElementById('btnGo').disabled=true;
+  document.getElementById('btnRst').disabled=false;
+  const body=document.getElementById('termBody');
+  body.innerHTML='';
+  let i=0;
+  function next(){
+    if(i>=demoScript.length){running=false;return}
+    const s=demoScript[i];
+    const el=document.createElement('div');
+    el.className='tl';
+    el.innerHTML=s.t||'&nbsp;';
+    body.appendChild(el);
+    body.scrollTop=body.scrollHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('v')));
+    i++;
+    setTimeout(next,s.d);
+  }
+  next();
+}
+function resetDemo(){
+  running=false;
+  document.getElementById('termBody').innerHTML='<div class="tl v"><span style="color:var(--dim)">$ </span>准备就绪...</div>';
+  document.getElementById('btnGo').disabled=false;
+  document.getElementById('btnRst').disabled=true;
+}
+</script>
+</body>
+</html>
